@@ -51,6 +51,13 @@ export default function Chat() {
     const trimmed = text.trim();
     if (trimmed.length === 0 || isLoading) return;
 
+    /* Contexto acotado: solo los últimos turnos reales (sin el saludo
+       fijo), para no enviar conversaciones crecientes al proveedor. */
+    const history = messages
+      .filter((m) => m.id !== INITIAL_MESSAGE.id)
+      .slice(-6)
+      .map((m) => ({ role: m.role, text: m.text }));
+
     setError(null);
     setInput("");
     setMessages((prev) => [
@@ -63,7 +70,7 @@ export default function Chat() {
       const response = await fetch("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmed }),
+        body: JSON.stringify({ message: trimmed, history }),
       });
 
       if (!response.ok) {

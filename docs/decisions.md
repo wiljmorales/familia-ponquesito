@@ -63,3 +63,32 @@ real, nunca antes.
   preguntaban. No se interpreta a ciegas.
 - Sigue sin haber precios, moneda, canal de contacto ni tono de marca: el
   asistente debe seguir respondiendo "unknown" sobre esos temas.
+
+## 2026-07-11 — Integración de Gemini como proveedor real
+
+- **Proveedor**: Google Gemini vía SDK oficial `@google/genai`, modelo
+  `gemini-3.1-flash-lite` (configurable con `GEMINI_MODEL`). Nace
+  `src/providers/` como estaba reservado. La clave vive en
+  `GEMINI_API_KEY` (`.env.local`, ignorado por git); solo la lee el código
+  de servidor y jamás se registra en logs.
+- **Selección de proveedor mínima**: con `GEMINI_API_KEY` se usa Gemini;
+  sin ella, el determinista (así la demo funciona sin configurar nada y
+  las pruebas jamás consumen cuota). Sin registry ni abstracción
+  multi-proveedor.
+- **Salida estructurada y validada**: Gemini responde JSON forzado por
+  `responseSchema` (enum de los 3 estados). El servidor valida parse, enum
+  y texto no vacío; ante salida inválida devuelve un fallback seguro
+  `unknown`. El usuario nunca ve JSON crudo ni errores técnicos.
+- **Prompt del sistema** en `src/assistant/prompt.ts`, separado de UI,
+  endpoint, proveedor y base de conocimiento: solo información confirmada
+  de la base, "unknown" ante lo pendiente/ambiguo, "human_required" para
+  cotizaciones/pedidos/disponibilidad, anti prompt-injection, no revelar
+  internals, no confirmar acciones.
+- **Cuota**: historial acotado a los últimos 6 turnos (validado en
+  servidor), respuestas limitadas (`maxOutputTokens` 500, tope 1200
+  caracteres), timeout de 15 s, sin herramientas ni grounding.
+- **Pendiente para producción (no implementado a propósito)**: rate
+  limiting por IP en el endpoint. Para el free tier del challenge basta el
+  límite de cuota del propio proveedor (mapeado a un mensaje amable con
+  HTTP 429); si el sitio se publica masivamente, añadir un limitador
+  simple en el route handler.

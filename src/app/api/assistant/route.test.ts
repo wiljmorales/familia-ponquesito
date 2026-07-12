@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { POST } from "./route";
+
+/* Sin clave, el endpoint usa el proveedor determinista: cero cuota. */
+beforeEach(() => {
+  delete process.env.GEMINI_API_KEY;
+});
 
 function makeRequest(body: string) {
   return new Request("http://localhost/api/assistant", {
@@ -35,6 +40,15 @@ describe("POST /api/assistant", () => {
 
   it("responde 400 si falta el campo message", async () => {
     const response = await POST(makeRequest(JSON.stringify({ text: "hola" })));
+    expect(response.status).toBe(400);
+  });
+
+  it("responde 400 ante un historial malformado", async () => {
+    const response = await POST(
+      makeRequest(
+        JSON.stringify({ message: "hola", history: [{ role: "hacker" }] }),
+      ),
+    );
     expect(response.status).toBe(400);
   });
 });

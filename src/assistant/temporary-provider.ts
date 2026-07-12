@@ -1,4 +1,8 @@
-import type { AssistantProvider, AssistantReply } from "./types";
+import type {
+  AssistantProvider,
+  AssistantReply,
+  AssistantRequest,
+} from "./types";
 
 /**
  * Proveedor temporal determinista (Reto 1, sin IA real).
@@ -130,9 +134,9 @@ function includesAny(text: string, keywords: string[]): boolean {
 }
 
 export const temporaryProvider: AssistantProvider = async (
-  message: string,
+  request: AssistantRequest,
 ): Promise<AssistantReply> => {
-  const text = normalize(message);
+  const text = normalize(request.message);
 
   if (includesAny(text, HUMAN_INTENT_KEYWORDS)) {
     return { status: "human_required", reply: REPLY_HUMAN_REQUIRED };
