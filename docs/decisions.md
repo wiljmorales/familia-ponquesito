@@ -50,3 +50,16 @@ real, nunca antes.
   `.mts` porque `vite-tsconfig-paths` v6 es solo ESM).
 - **Nota de entorno**: el build requiere Node ≥ 20.9 (el `.nvmrc` pide
   22.14.0; usar `nvm use` antes de `npm run build`).
+
+## 2026-07-11 — Nace `src/knowledge/` con las primeras respuestas reales
+
+- El descubrimiento con Karem se está manejando con un cuestionario externo
+  (ChatGPT), no con `docs/familia-ponquesito-discovery.md`. La fuente de
+  verdad del asistente es `src/knowledge/familia-ponquesito.md`, que separa
+  explícitamente: **confirmado** / **por confirmar (ambiguo)** /
+  **pendiente**.
+- Respuestas recibidas sin su pregunta original (17: "No",
+  18: "todas las mencionadas") no se incorporan hasta conocer qué
+  preguntaban. No se interpreta a ciegas.
+- Sigue sin haber precios, moneda, canal de contacto ni tono de marca: el
+  asistente debe seguir respondiendo "unknown" sobre esos temas.
