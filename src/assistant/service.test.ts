@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { geminiProvider } from "@/providers/gemini";
 import {
   AssistantInputError,
@@ -25,7 +25,11 @@ async function ask(message: string) {
 }
 
 describe("selección de proveedor", () => {
-  it("usa el determinista cuando no hay GEMINI_API_KEY", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("usa el determinista cuando no hay GEMINI_API_KEY (fuera de producción)", () => {
     expect(defaultProvider()).toBe(temporaryProvider);
   });
 
@@ -33,6 +37,17 @@ describe("selección de proveedor", () => {
     process.env.GEMINI_API_KEY = "clave-de-prueba";
     expect(defaultProvider()).toBe(geminiProvider);
     delete process.env.GEMINI_API_KEY;
+  });
+
+  it("falla de forma visible en producción sin GEMINI_API_KEY (nunca degrada en silencio)", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    expect(() => defaultProvider()).toThrow(/GEMINI_API_KEY/);
+  });
+
+  it("en producción con GEMINI_API_KEY usa Gemini", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("GEMINI_API_KEY", "clave-de-prueba");
+    expect(defaultProvider()).toBe(geminiProvider);
   });
 });
 

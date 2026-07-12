@@ -15,12 +15,23 @@ export const MAX_MESSAGE_LENGTH = 1000;
 export const MAX_HISTORY_TURNS = 6;
 
 /**
- * Con GEMINI_API_KEY se usa el proveedor real; sin ella, el determinista
- * (pruebas y entornos sin configurar). Las pruebas también pueden inyectar
- * un proveedor explícito en askAssistant.
+ * Con GEMINI_API_KEY se usa el proveedor real. Sin ella, el determinista
+ * SOLO en desarrollo y pruebas; en producción es un error de configuración
+ * y debe fallar de forma visible, nunca degradar en silencio a la demo.
+ * Las pruebas también pueden inyectar un proveedor explícito en askAssistant.
  */
 export function defaultProvider(): AssistantProvider {
-  return isGeminiConfigured() ? geminiProvider : temporaryProvider;
+  if (isGeminiConfigured()) {
+    return geminiProvider;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "Falta GEMINI_API_KEY: el asistente no puede funcionar en producción sin IA.",
+    );
+  }
+
+  return temporaryProvider;
 }
 
 function parseHistory(value: unknown): ChatTurn[] {
