@@ -1,21 +1,46 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Playfair_Display, Sacramento } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const playfair = Playfair_Display({
+  variable: "--font-playfair",
+  subsets: ["latin"],
+  style: ["normal", "italic"],
+});
+
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const sacramento = Sacramento({
+  variable: "--font-sacramento",
   subsets: ["latin"],
+  weight: "400",
 });
+
+const SITE_URL = "https://familia-ponquesito.vercel.app";
+const TITLE = "Tortas personalizadas en Barquisimeto | Familia Ponquesito";
+const DESCRIPTION =
+  "Tortas personalizadas para cumpleaños y celebraciones en Barquisimeto. Diseños hechos con amor, sabores para elegir y atención personalizada.";
 
 export const metadata: Metadata = {
-  title: "Familia Ponquesito — Asistente",
-  description:
-    "Asistente virtual de Familia Ponquesito. Primera versión: demo del chat con respuestas honestas mientras se construye la base de conocimiento.",
+  metadataBase: new URL(SITE_URL),
+  title: TITLE,
+  description: DESCRIPTION,
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    url: SITE_URL,
+    siteName: "Familia Ponquesito",
+    locale: "es_VE",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
 };
 
 export default function RootLayout({
@@ -26,7 +51,7 @@ export default function RootLayout({
   return (
     <html
       lang="es"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${playfair.variable} ${inter.variable} ${sacramento.variable} h-full antialiased`}
     >
       {/* suppressHydrationWarning: extensiones como Grammarly inyectan
           atributos en <body> y disparan falsos avisos de hidratación */}
