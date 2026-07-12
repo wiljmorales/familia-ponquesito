@@ -87,8 +87,16 @@ real, nunca antes.
 - **Cuota**: historial acotado a los últimos 6 turnos (validado en
   servidor), respuestas limitadas (`maxOutputTokens` 500, tope 1200
   caracteres), timeout de 15 s, sin herramientas ni grounding.
-- **Pendiente para producción (no implementado a propósito)**: rate
-  limiting por IP en el endpoint. Para el free tier del challenge basta el
-  límite de cuota del propio proveedor (mapeado a un mensaje amable con
-  HTTP 429); si el sitio se publica masivamente, añadir un limitador
-  simple en el route handler.
+- ~~**Pendiente para producción**: rate limiting por IP.~~ Implementado el
+  2026-07-12 (ver entrada siguiente).
+
+## 2026-07-12 — Protección básica de cuota (rate limiting en memoria)
+
+- Limitador de ventana fija por IP en el endpoint: **10 peticiones por
+  minuto**; el exceso recibe 429 con mensaje amable **sin llamar a Gemini**
+  (no consume cuota). IP tomada de `x-forwarded-for` (Vercel la provee).
+- **Limitación conocida y aceptada**: el contador vive en memoria, así que
+  en serverless cada instancia cuenta por separado — el límite no es
+  global. Cubre el caso realista del challenge (un curioso o un bot simple
+  en bucle); un ataque distribuido requeriría un limitador externo
+  (p. ej. Redis), infraestructura que decidimos no añadir para este reto.

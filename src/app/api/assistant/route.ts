@@ -1,5 +1,15 @@
 import { AssistantInputError, askAssistant } from "@/assistant/service";
 import { AssistantProviderError } from "@/providers/gemini";
+import { createRateLimiter } from "./rate-limit";
+
+/* Un usuario conversando de verdad no llega a este ritmo. */
+const isAllowed = createRateLimiter({ limit: 10, windowMs: 60_000 });
+
+function clientKey(request: Request): string {
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown"
+  );
+}
 
 const PROVIDER_ERROR_MESSAGES: Record<AssistantProviderError["kind"], string> =
   {
@@ -14,6 +24,16 @@ const PROVIDER_ERROR_MESSAGES: Record<AssistantProviderError["kind"], string> =
   };
 
 export async function POST(request: Request) {
+  if (!isAllowed(clientKey(request))) {
+    return Response.json(
+      {
+        error:
+          "Ha enviado muchas consultas en poco tiempo. Espere un momento e intente de nuevo, por favor.",
+      },
+      { status: 429 },
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();
