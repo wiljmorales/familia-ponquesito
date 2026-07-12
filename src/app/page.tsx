@@ -15,19 +15,17 @@ export default function Home() {
             Asistente virtual · primera versión
           </span>
           <p className="max-w-lg text-sm leading-relaxed text-muted sm:text-base">
-            Este asistente responderá preguntas sobre Familia Ponquesito.
-            Mientras su base de conocimiento se construye con la información
-            real del negocio, puedes probar cómo conversa: responde con lo que
-            sabe, admite lo que no sabe y te indica cuándo es mejor hablar con
-            una persona.
+            Repostería familiar en Barquisimeto. Pregúntele al asistente por
+            nuestras tortas, sabores, precios, entregas y cómo hacer su
+            pedido: responde con la información real del negocio, admite lo
+            que no sabe y le indica cuándo es mejor hablar con una persona.
           </p>
         </header>
 
         <Chat />
 
         <footer className="text-center text-xs text-muted">
-          Demo del Reto 1 · Platzi Vibe Coding Challenge · La información del
-          negocio aún no está cargada.
+          Demo del Reto 1 · Platzi Vibe Coding Challenge
         </footer>
       </main>
     </div>

@@ -15,19 +15,18 @@ const INITIAL_MESSAGE: ChatMessage = {
   role: "assistant",
   status: "answered",
   text:
-    "¡Hola! 👋 Soy el asistente de Familia Ponquesito, en mi primera " +
-    "versión. Mi base de conocimiento con la información real del negocio " +
-    "todavía está en construcción, así que aún no puedo darte precios, " +
-    "sabores ni horarios. Pruébame: respondo con lo que sé, admito lo que " +
-    "no sé y te aviso cuándo conviene hablar con una persona.",
+    "¡Hola! 👋 Soy el asistente virtual de Familia Ponquesito. Puedo " +
+    "ayudarle con información sobre nuestras tortas: sabores, tamaños, " +
+    "precios, entregas y cómo hacer su pedido. Si algo no lo sé, se lo " +
+    "diré con honestidad. ¿En qué puedo ayudarle?",
 };
 
-/* Neutrales a propósito: no afirman productos, precios, horarios ni
-   políticas. Cada una demuestra uno de los tres estados del asistente. */
+/* Respaldadas por la base de conocimiento; cubren los estados del
+   asistente (respuesta directa y derivación a una persona). */
 const SUGGESTED_QUESTIONS = [
-  "¿Qué puedes hacer?",
-  "¿Tienen lista de precios?",
-  "Quiero hablar con una persona",
+  "¿Qué sabores de torta tienen?",
+  "¿Hacen entregas a domicilio?",
+  "¿Cómo hago un pedido?",
 ];
 
 const STATUS_LABELS: Partial<Record<AssistantStatus, string>> = {
