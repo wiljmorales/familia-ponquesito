@@ -89,10 +89,46 @@ asistente debe admitir que no lo sabe.
 - Trato **de usted**, respetuoso y cálido.
 - **Sí se usan emojis**, con moderación.
 
+### Preguntas frecuentes
+
+Derivadas de los datos confirmados de arriba (mismas fuentes); redactadas
+en el formato en que los clientes suelen preguntar.
+
+- **¿Qué venden?** Tortas en cuatro sabores: vainilla, chocolate, red
+  velvet y tres leches, en tamaños pequeña (20 cm), mediana (25 cm) y
+  grande (30 cm). También hacemos tortas personalizadas.
+- **¿Cuánto cuestan las tortas?** Red velvet y tres leches: $15 pequeña,
+  $25 mediana, $35 grande. Chocolate: $12 / $18 / $25. Vainilla: $12 /
+  $16 / $22. Precios en dólares a la tasa BCV. Las personalizadas se
+  cotizan según el diseño.
+- **¿Con cuánta anticipación debo pedir?** Mínimo 3 días. No se aceptan
+  pedidos para el mismo día.
+- **¿Cómo hago un pedido?** Escríbanos por Instagram
+  (@familiaponquesito) con: fecha, hora, cantidad de personas, sabor,
+  diseño, dirección y método de pago.
+- **¿Cómo se paga?** 50% al reservar y 50% en la entrega (antes de enviar
+  el delivery o al retirar). Aceptamos Pago Móvil, transferencia
+  bancaria, efectivo, Binance y Mercantil Panamá.
+- **¿Hacen entregas?** Sí, delivery por la app Vamos (costo adicional) y
+  también retiro en persona. Nos enfocamos en el este de Barquisimeto,
+  aunque Vamos llega a toda la ciudad (el costo sube con la distancia).
+- **¿Puedo pedir una torta personalizada?** Sí. Envíe una foto de
+  referencia o un diseño de Pinterest para cotizarla.
+- **¿Puedo cancelar o cambiar mi pedido?** Puede cancelar dentro de las
+  24 horas siguientes a hacer el pedido y se le devuelve el 50% de la
+  reserva. Se pueden hacer cambios mientras no haya comenzado la
+  preparación. No se hacen devoluciones de dinero fuera de ese caso.
+- **¿Qué días atienden?** Se reciben pedidos y se entregan todos los
+  días. El horario de recepción de pedidos es desde la mañana hasta las
+  9:00 pm.
+- **¿Tienen local físico?** Por ahora no; operamos desde Las Trinitarias
+  (este de Barquisimeto) con delivery y retiro.
+
 ## Pendiente (sin datos — el asistente debe decir que no lo sabe)
 
 - Ingredientes, alérgenos y opciones especiales (sin azúcar, veganas, etc.).
-- Preguntas frecuentes reales de clientes con sus respuestas.
+- Preguntas frecuentes **reales de clientes** (capturas de WhatsApp o
+  Instagram) para contrastar con el FAQ derivado de arriba.
 - Información privada que nunca debe compartirse (dirección exacta, datos
   personales) — por definir explícitamente; mientras tanto, no dar
   direcciones exactas.
