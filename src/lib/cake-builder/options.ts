@@ -3,6 +3,9 @@
  * de aquí, así que sumar/quitar una opción es editar datos, no tocar
  * componentes. Assets procesados en `scripts/process-cake-assets.mjs` (ver
  * `docs/challenge-3.md`).
+ *
+ * width/height de cada opción deben coincidir con el archivo real (hay una
+ * prueba que lo verifica: options.test.ts).
  */
 import type { CakeDesign, CakeImageOption, StepId, Tiers } from "./types";
 
@@ -35,15 +38,15 @@ export const TIER_OPTIONS: TierOption[] = [
     tiers: 1,
     label: "Un piso",
     image: `${ASSET_BASE}/bases/one-tier-cream.webp`,
-    width: 1022,
-    height: 885,
+    width: 1024,
+    height: 883,
   },
   {
     tiers: 2,
     label: "Dos pisos",
     image: `${ASSET_BASE}/bases/two-tier-cream.webp`,
     width: 904,
-    height: 902,
+    height: 899,
   },
 ];
 
@@ -53,36 +56,36 @@ export const BASE_OPTIONS: Record<Tiers, CakeImageOption[]> = {
       id: "one-tier-cream",
       label: "Crema",
       image: `${ASSET_BASE}/bases/one-tier-cream.webp`,
-      width: 1022,
-      height: 885,
+      width: 1024,
+      height: 883,
     },
     {
       id: "one-tier-blush",
       label: "Rosado",
       image: `${ASSET_BASE}/bases/one-tier-blush.webp`,
-      width: 859,
-      height: 713,
+      width: 861,
+      height: 715,
     },
     {
       id: "one-tier-yellow",
       label: "Amarillo",
       image: `${ASSET_BASE}/bases/one-tier-yellow.webp`,
-      width: 966,
-      height: 741,
+      width: 967,
+      height: 737,
     },
     {
       id: "one-tier-lilac",
       label: "Lila",
       image: `${ASSET_BASE}/bases/one-tier-lilac.webp`,
-      width: 921,
-      height: 778,
+      width: 922,
+      height: 779,
     },
     {
       id: "one-tier-chocolate",
       label: "Chocolate",
       image: `${ASSET_BASE}/bases/one-tier-chocolate.webp`,
-      width: 1012,
-      height: 791,
+      width: 1014,
+      height: 793,
     },
   ],
   2: [
@@ -91,21 +94,21 @@ export const BASE_OPTIONS: Record<Tiers, CakeImageOption[]> = {
       label: "Crema",
       image: `${ASSET_BASE}/bases/two-tier-cream.webp`,
       width: 904,
-      height: 902,
+      height: 899,
     },
     {
       id: "two-tier-cream-blush",
       label: "Crema y rosado",
       image: `${ASSET_BASE}/bases/two-tier-cream-blush.webp`,
       width: 902,
-      height: 882,
+      height: 883,
     },
     {
       id: "two-tier-cream-yellow",
       label: "Crema y amarillo",
       image: `${ASSET_BASE}/bases/two-tier-cream-yellow.webp`,
-      width: 1026,
-      height: 963,
+      width: 1029,
+      height: 964,
     },
   ],
 };
@@ -115,15 +118,15 @@ export const STAND_OPTIONS: CakeImageOption[] = [
     id: "stand-blush",
     label: "Rosado",
     image: `${ASSET_BASE}/stands/stand-blush.webp`,
-    width: 1066,
-    height: 678,
+    width: 1067,
+    height: 675,
   },
   {
     id: "stand-white-gold",
     label: "Blanco con dorado",
     image: `${ASSET_BASE}/stands/stand-white-gold.webp`,
-    width: 960,
-    height: 593,
+    width: 963,
+    height: 590,
   },
 ];
 
@@ -132,15 +135,15 @@ export const PLAQUE_OPTIONS: CakeImageOption[] = [
     id: "plaque-blush-gold",
     label: "Rosada y dorada",
     image: `${ASSET_BASE}/plaques/plaque-blush-gold.webp`,
-    width: 1082,
-    height: 727,
+    width: 1085,
+    height: 729,
   },
   {
     id: "plaque-lilac-gold",
     label: "Lila y dorada",
     image: `${ASSET_BASE}/plaques/plaque-lilac-gold.webp`,
-    width: 1090,
-    height: 744,
+    width: 1093,
+    height: 746,
   },
 ];
 
@@ -149,29 +152,29 @@ export const TOPPER_OPTIONS: CakeImageOption[] = [
     id: "topper-happy-birthday-gold",
     label: "Happy Birthday dorado",
     image: `${ASSET_BASE}/toppers/topper-happy-birthday-gold.webp`,
-    width: 1000,
-    height: 1008,
+    width: 1002,
+    height: 1011,
   },
   {
     id: "topper-feliz-cumpleanos-bow",
     label: "Feliz Cumpleaños con lazo",
     image: `${ASSET_BASE}/toppers/topper-feliz-cumpleanos-bow.webp`,
-    width: 963,
-    height: 890,
+    width: 966,
+    height: 892,
   },
   {
     id: "topper-happy-birthday-30",
     label: "Happy Birthday 30",
     image: `${ASSET_BASE}/toppers/topper-happy-birthday-30.webp`,
-    width: 938,
-    height: 1046,
+    width: 940,
+    height: 1048,
   },
   {
     id: "topper-princess",
     label: "Princess",
     image: `${ASSET_BASE}/toppers/topper-princess.webp`,
-    width: 892,
-    height: 822,
+    width: 894,
+    height: 824,
   },
 ];
 

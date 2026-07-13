@@ -253,3 +253,37 @@ real, nunca antes.
 - Sin `error.tsx`: se evaluó, pero ni el Reto 1 ni el Reto 2 tienen uno;
   se mantiene consistencia con el resto de la app en vez de introducir un
   patrón nuevo solo para este reto.
+
+## 2026-07-13 — Reto 3: corrección de capas desalineadas (Etapa 5)
+
+Reportado por el usuario probando la app real (no una captura aislada):
+el topper se veía "montado encima" y el centro de la placa dejaba ver el
+fondo. Tres causas independientes, las tres corregidas:
+
+- **Placas con el interior transparente**: el modelo de segmentación
+  borró ~54% del área (todo el relleno crema, no solo el marco),
+  interpretando esa superficie lisa como fondo. `scripts/process-cake-
+  assets.mjs` ahora detecta componentes de transparencia encerradas (no
+  conectadas al borde) y rellena solo las grandes (>=25%, muy por encima
+  del máximo legítimo de ~17% de los lazos cursivos de los toppers) con
+  el color de la imagen ORIGINAL — el RGB que deja el modelo en la zona
+  borrada no es confiable.
+- **`CakeStage` con offsets fijos relativos al stage**: no distinguía
+  entre una torta de 1 y 2 pisos (la de 2 pisos es más alta con el mismo
+  ancho), así que el topper quedaba descuadrado según el número de pisos.
+  Reescrito a flujo normal (flex-column) con márgenes negativos
+  calculados por imagen, expresados como fracción de la altura PROPIA de
+  cada capa en vez de un offset fijo contra el stage.
+- **`sharp().trim()` dejaba una cola de sombra semitransparente** de
+  varias decenas de píxeles que, sumada entre capas, se notaba como un
+  hueco. Reemplazado por un recorte al bounding box de píxeles
+  realmente sólidos (`alpha >= 200`), no solo "no transparentes".
+- **Bug secundario**: `options.ts` quedó con dimensiones viejas después
+  de regenerar los assets (cambiaron unos pocos píxeles), y `CakeStage`
+  usa esos números para su matemática de posicionamiento — desajuste
+  silencioso. Se agregó `options.test.ts` comparando cada `width`/
+  `height` del catálogo contra el archivo real en disco, y `sharp` como
+  devDependency explícita (el script ya lo usaba sin declararlo).
+
+Verificado con capturas reales en varias combinaciones tras el arreglo,
+incluyendo la combinación exacta reportada.

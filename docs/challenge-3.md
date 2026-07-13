@@ -255,6 +255,60 @@ ya estaba bien por haberse visto correcto visualmente.
   unitarias de renderizado — mismo criterio que ya sigue el resto del
   repo, que no usa Testing Library).
 
+## Etapa 5 — Corrección de capas desalineadas (reporte real de uso)
+
+Al probar el flujo real (no una captura aislada), el usuario reportó dos
+problemas visuales concretos en el resultado final: el topper se veía
+"montado encima" de la torta en vez de asentado, y el centro de la placa
+dejaba ver el fondo en vez de una superficie sólida. Se investigaron y
+corrigieron tres causas independientes:
+
+1. **Las placas tenían el interior transparente por error**: se midió el
+   canal alpha de las 2 placas ya procesadas y se confirmó que ~54% del
+   área (todo el relleno crema interior, no solo el marco) tenía
+   `alpha = 0`. El modelo de segmentación interpretó esa superficie lisa y
+   clara como fondo. Para distinguir esto de agujeros legítimos (los
+   lazos de las letras cursivas en los toppers, hasta ~17% del área), se
+   escanearon todos los assets buscando componentes conexas de
+   transparencia NO conectadas al borde de la imagen; el salto entre el
+   máximo legítimo (17%) y el mínimo del bug (54%) fue lo bastante grande
+   para fijar un umbral seguro (25%). `scripts/process-cake-assets.mjs`
+   ahora rellena esas componentes grandes usando el color de la imagen
+   **original** (el RGB que deja el modelo en la zona que borró no es
+   confiable — se verificó que no correspondía al color real).
+2. **`CakeStage` posicionaba las capas con porcentajes fijos relativos al
+   alto del *stage***, sin tener en cuenta que una torta de 2 pisos es
+   bastante más alta que una de 1 piso con el mismo ancho — por eso el
+   topper quedaba flotando en vez de asentarse. Se reescribió para usar
+   flujo normal (flex-column) con márgenes negativos calculados por
+   imagen (`sinkMarginPercent`): la fracción de superposición se expresa
+   como % de la altura PROPIA de cada capa (derivada de su propio ancho
+   renderizado y su aspect ratio real), no como un offset fijo contra el
+   stage. Así el mismo cálculo da un resultado visualmente correcto sin
+   importar cuántos pisos tenga la torta.
+3. **`sharp().trim()` dejaba una cola de sombra semitransparente** de
+   varias decenas de píxeles en el borde inferior de tortas y pedestales
+   (no un antialiasing normal de 2-3px), que sumada entre dos capas se
+   notaba como un hueco visible aunque los recuadros técnicamente se
+   superpusieran unos píxeles. Se reemplazó `.trim()` por un recorte al
+   bounding box de los píxeles realmente SÓLIDOS (`alpha >= 200`, con un
+   margen de 3px), conservando el degradado suave dentro de ese recuadro
+   sin dejar que decida dónde cortar.
+4. **Bug secundario descubierto durante la corrección**: al regenerar los
+   assets, sus dimensiones reales cambiaron unos pocos píxeles, pero
+   `src/lib/cake-builder/options.ts` seguía con los valores viejos —
+   `CakeStage` usa esos números para su matemática de posicionamiento, así
+   que quedaron desalineados en silencio. Se agregó
+   `src/lib/cake-builder/options.test.ts`, que compara cada `width`/
+   `height` del catálogo contra el archivo real en disco, para que este
+   tipo de desajuste falle la próxima vez en `npm test` en vez de
+   quedar invisible. También se agregó `sharp` como devDependency
+   explícita (el script ya lo usaba, pero no estaba declarado).
+
+Verificado con capturas reales en varias combinaciones (1 y 2 pisos, con
+y sin placa/topper, escritorio y móvil) después del arreglo, incluyendo
+la combinación exacta que reportó el usuario.
+
 ## Preguntas pendientes
 
 - **Incentivo/resultado exacto que recibe la persona.** El brief del reto
