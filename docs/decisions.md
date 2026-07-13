@@ -136,6 +136,33 @@ real, nunca antes.
   del footer queda tras `NEXT_PUBLIC_WHATSAPP_URL`; sin definir, el ícono
   no se muestra. No se inventó un número.
 
+## 2026-07-12 — Reto 3: rama, assets del cake builder y tabla nueva en Supabase
+
+- **Rama**: `reto-3/crea-tu-torta`, creada desde `main`, siguiendo la misma
+  convención de los retos anteriores (`reto-N/nombre-corto`).
+- **Assets sin transparencia real**: los 17 PNG generados con ChatGPT para
+  el cake builder no tienen canal alpha (verificado con `sharp`); el fondo
+  "transparente" era una cuadrícula gris/blanca horneada como píxeles. Un
+  primer intento de recorte por umbral de color + flood fill falló de
+  forma visible (borró por completo el pedestal blanco-dorado, destruyó
+  los trazos finos de los toppers). Se resolvió con
+  `@imgly/background-removal-node` (modelo de segmentación real),
+  agregado como devDependency usada solo por
+  `scripts/process-cake-assets.mjs` (nunca se importa desde `src/`, no
+  viaja al bundle). 16 de los 17 assets quedaron utilizables en
+  `public/assets/cake-builder/` (se excluyó el topper de abejas/flores por
+  traer el nombre "Alana" horneado en la imagen). Detalle completo,
+  incluyendo el riesgo de las vulnerabilidades transitorias de esa
+  dependencia, en `docs/challenge-3.md`.
+- **Tabla nueva `cake_designs`, no se reutiliza `cake_requests`**:
+  `cake_requests` tiene columnas `NOT NULL` (`celebration_type`,
+  `preferred_flavor`, `cake_description`) que no aplican al flujo del
+  Reto 3; forzarlas con valores inventados ensuciaría los datos reales del
+  Reto 2. Tabla nueva = cero riesgo para esos datos, cero migración. Mismo
+  patrón de seguridad (RLS sin políticas públicas, solo `service_role`
+  desde Server Action). Se define el esquema exacto en la etapa de
+  persistencia. Ver `docs/challenge-3.md`.
+
 ## 2026-07-13 — Reto 2: endurecer el manejo de la imagen de referencia
 
 - **Columna renombrada**: `reference_image_url` → `reference_image_path`.
@@ -160,3 +187,103 @@ real, nunca antes.
   datos porque expiraría. No está conectada a ninguna pantalla todavía (no
   hay panel administrativo en este reto); queda lista para cuando exista
   uno.
+
+## 2026-07-13 — Reto 3: ruta, estado del builder y vista previa (Etapa 2)
+
+- **Ruta `/crea-tu-torta`** autocontenida (sin `Header`/`Footer`
+  globales), catálogo de opciones data-driven en
+  `src/lib/cake-builder/options.ts`, estado único (`CakeDesign`) en
+  `useCakeBuilder`. Detalle completo en `docs/challenge-3.md`.
+- **Verificación real, no asumida**: se instaló Playwright temporalmente
+  (`npm install --no-save`, nunca quedó en `package.json`) para conducir
+  el wizard completo en headless Chrome, en escritorio y móvil, con
+  distintas combinaciones de piso/color/pedestal/placa/topper, y así
+  ajustar a ojo los offsets de capas de `CakeStage` contra los assets
+  reales. Se encontró y corrigió un bug real de accesibilidad de paso: el
+  input del mensaje no tenía `id`/`name`, así que su `<label>` no quedaba
+  asociado.
+- **Pendiente a propósito**: el botón "Siguiente" del último paso queda
+  deshabilitado hasta que exista la vista final (Etapa 3).
+
+## 2026-07-13 — Reto 3: vista final, formulario, persistencia y código (Etapa 3)
+
+- **Tabla `cake_designs`** agregada a `supabase/schema.sql` (RLS sin
+  políticas públicas, solo `service_role`). **No se aplicó contra el
+  proyecto real de Supabase**: solo hay acceso a la API con la
+  `service_role` key, no a una conexión directa a Postgres para ejecutar
+  DDL. Queda pendiente que el dueño del proyecto pegue el script
+  actualizado en el SQL Editor (mismo flujo que el Reto 2).
+- **Formulario adaptado** (`DesignRequestForm`), no reutilizado literal de
+  `RequestForm`: mismos primitivos de UI, honeypot y estados
+  idle/success/error, pero campos distintos (los del Reto 3). Reutiliza
+  `minCelebrationDateString` del Reto 2 en vez de duplicar la regla de
+  anticipación mínima.
+- **Validación server-side del `CakeDesign`** contra el catálogo real de
+  `options.ts`, no solo tipos — un id fuera de catálogo se rechaza antes
+  de guardar.
+- **Código de diseño `FP-3-XXXX`** generado en servidor con alfabeto sin
+  caracteres ambiguos, con reintento ante colisión (columna `unique`).
+- **Verificado localmente sin tocar la base real**: flujo completo con
+  Playwright headless hasta el envío; sin la tabla creada todavía, falla
+  con el mensaje amable esperado (no un error crudo) — confirma que el
+  manejo de errores es correcto antes de tener la tabla disponible.
+- 11 pruebas nuevas (70 en total): validación del diseño contra catálogo y
+  formato del código de diseño.
+
+## 2026-07-13 — Reto 3: auditoría de accesibilidad y manejo de errores (Etapa 4)
+
+- **`role="radio"` sin navegación por flechas → botones toggle**: los
+  selectores del builder se anunciaban como grupo de radio ARIA sin
+  implementar el comportamiento de teclado que ese rol exige. Se cambió a
+  `aria-pressed` (Tab + Enter/Espacio), que sí coincide con el
+  comportamiento real, con `aria-labelledby` apuntando al título del
+  paso.
+- **Foco no se movía entre pasos**: el `<h2>` del paso no se remonta al
+  cambiar de paso, así que el foco de teclado quedaba fijo en "Siguiente".
+  Se agregó `tabIndex={-1}` + foco programático en el título de cada paso
+  y de la vista final. Verificado con Playwright navegando solo con
+  teclado.
+- **`submitCakeDesign` sin `try/catch` alrededor de Supabase**: a
+  diferencia de `submit-cake-request.ts` (Reto 2), la llamada a
+  `getSupabaseServiceClient()` y el `insert` no estaban protegidos —
+  variables de entorno faltantes o un fallo de red habrían roto en crudo
+  en vez de mostrar el mensaje amable ya diseñado. Corregido para seguir
+  el mismo patrón que el Reto 2. Verificado guardando y borrando un lead
+  de prueba real después del cambio.
+- Sin `error.tsx`: se evaluó, pero ni el Reto 1 ni el Reto 2 tienen uno;
+  se mantiene consistencia con el resto de la app en vez de introducir un
+  patrón nuevo solo para este reto.
+
+## 2026-07-13 — Reto 3: corrección de capas desalineadas (Etapa 5)
+
+Reportado por el usuario probando la app real (no una captura aislada):
+el topper se veía "montado encima" y el centro de la placa dejaba ver el
+fondo. Tres causas independientes, las tres corregidas:
+
+- **Placas con el interior transparente**: el modelo de segmentación
+  borró ~54% del área (todo el relleno crema, no solo el marco),
+  interpretando esa superficie lisa como fondo. `scripts/process-cake-
+  assets.mjs` ahora detecta componentes de transparencia encerradas (no
+  conectadas al borde) y rellena solo las grandes (>=25%, muy por encima
+  del máximo legítimo de ~17% de los lazos cursivos de los toppers) con
+  el color de la imagen ORIGINAL — el RGB que deja el modelo en la zona
+  borrada no es confiable.
+- **`CakeStage` con offsets fijos relativos al stage**: no distinguía
+  entre una torta de 1 y 2 pisos (la de 2 pisos es más alta con el mismo
+  ancho), así que el topper quedaba descuadrado según el número de pisos.
+  Reescrito a flujo normal (flex-column) con márgenes negativos
+  calculados por imagen, expresados como fracción de la altura PROPIA de
+  cada capa en vez de un offset fijo contra el stage.
+- **`sharp().trim()` dejaba una cola de sombra semitransparente** de
+  varias decenas de píxeles que, sumada entre capas, se notaba como un
+  hueco. Reemplazado por un recorte al bounding box de píxeles
+  realmente sólidos (`alpha >= 200`), no solo "no transparentes".
+- **Bug secundario**: `options.ts` quedó con dimensiones viejas después
+  de regenerar los assets (cambiaron unos pocos píxeles), y `CakeStage`
+  usa esos números para su matemática de posicionamiento — desajuste
+  silencioso. Se agregó `options.test.ts` comparando cada `width`/
+  `height` del catálogo contra el archivo real en disco, y `sharp` como
+  devDependency explícita (el script ya lo usaba sin declararlo).
+
+Verificado con capturas reales en varias combinaciones tras el arreglo,
+incluyendo la combinación exacta reportada.

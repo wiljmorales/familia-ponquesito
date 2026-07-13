@@ -10,7 +10,22 @@ Challenge**. El repositorio evoluciona reto a reto (ver
 | Ruta | Qué es | Reto |
 |---|---|---|
 | `/` | Landing de producto: propuesta de valor, galería, sabores, condiciones y formulario de solicitud de cotización (persistido en Supabase). | Reto 2 |
+| `/crea-tu-torta` | Juego "Crea tu propia torta": decora una torta paso a paso y deja tus datos para recibir una cotización personalizada inspirada en tu diseño (persistido en Supabase). | Reto 3 |
 | `/asistente` | Chat del asistente virtual que responde con la base de conocimiento real del negocio y admite lo que no sabe. | Reto 1 |
+
+## Reto 3 — "Crea tu propia torta": captura de leads con un juego
+
+Wizard mobile-first para decorar una torta (piso, color, pedestal, placa
+con dedicatoria, topper) sobre assets reales del negocio con transparencia
+recortada a propósito (ver `docs/challenge-3.md`). Solo después de ver el
+resultado terminado aparece la llamada a la acción: dejar los datos de
+contacto para recibir una cotización personalizada de Familia Ponquesito
+inspirada en el diseño. Cada lead guarda el diseño completo (JSON
+reconstruible) y recibe un código de diseño (`FP-3-XXXX`) en la tabla
+`cake_designs` — separada de `cake_requests` (Reto 2) a propósito, para no
+mezclar ambos tipos de lead ni forzar campos que no aplican. Detalle
+completo, riesgos y decisiones en
+[`docs/challenge-3.md`](docs/challenge-3.md).
 
 ## Reto 2 — Landing con captura real de datos
 
@@ -26,9 +41,10 @@ de alcance en [`docs/challenge-2.md`](docs/challenge-2.md).
 
 1. Crea un proyecto en [supabase.com](https://supabase.com).
 2. Copia el contenido de [`supabase/schema.sql`](supabase/schema.sql) en el
-   **SQL Editor** de tu proyecto y ejecútalo. Crea la tabla
-   `cake_requests` (con RLS habilitado, sin políticas públicas) y el bucket
-   privado `cake-references`.
+   **SQL Editor** de tu proyecto y ejecútalo (es idempotente: puedes
+   volver a correrlo sin duplicar nada). Crea las tablas `cake_requests` y
+   `cake_designs` (ambas con RLS habilitado, sin políticas públicas) y el
+   bucket privado `cake-references`.
 3. En **Project Settings → API Keys**, copia la URL del proyecto y la
    clave secreta a tu `.env.local` (ver `.env.example`). En proyectos
    nuevos aparece como **"Secret key"** (`sb_secret_...`); en proyectos
@@ -107,7 +123,7 @@ cada una):
 Pruebas y lint:
 
 ```bash
-npm test      # 59 pruebas (no consumen cuota de Gemini ni tocan Supabase)
+npm test      # 70 pruebas (no consumen cuota de Gemini ni tocan Supabase)
 npm run lint
 npm run build
 ```
@@ -117,5 +133,6 @@ npm run build
 - [`docs/product-brief.md`](docs/product-brief.md) — contexto general del producto
 - [`docs/challenge-1.md`](docs/challenge-1.md) — requisitos y criterios del Reto 1
 - [`docs/challenge-2.md`](docs/challenge-2.md) — requisitos y criterios del Reto 2
+- [`docs/challenge-3.md`](docs/challenge-3.md) — requisitos y criterios del Reto 3
 - [`docs/decisions.md`](docs/decisions.md) — registro de decisiones con motivos
 - [`CLAUDE.md`](CLAUDE.md) — reglas para agentes de IA que trabajen en el repo
