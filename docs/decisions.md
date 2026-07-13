@@ -136,6 +136,33 @@ real, nunca antes.
   del footer queda tras `NEXT_PUBLIC_WHATSAPP_URL`; sin definir, el ícono
   no se muestra. No se inventó un número.
 
+## 2026-07-12 — Reto 3: rama, assets del cake builder y tabla nueva en Supabase
+
+- **Rama**: `reto-3/crea-tu-torta`, creada desde `main`, siguiendo la misma
+  convención de los retos anteriores (`reto-N/nombre-corto`).
+- **Assets sin transparencia real**: los 17 PNG generados con ChatGPT para
+  el cake builder no tienen canal alpha (verificado con `sharp`); el fondo
+  "transparente" era una cuadrícula gris/blanca horneada como píxeles. Un
+  primer intento de recorte por umbral de color + flood fill falló de
+  forma visible (borró por completo el pedestal blanco-dorado, destruyó
+  los trazos finos de los toppers). Se resolvió con
+  `@imgly/background-removal-node` (modelo de segmentación real),
+  agregado como devDependency usada solo por
+  `scripts/process-cake-assets.mjs` (nunca se importa desde `src/`, no
+  viaja al bundle). 16 de los 17 assets quedaron utilizables en
+  `public/assets/cake-builder/` (se excluyó el topper de abejas/flores por
+  traer el nombre "Alana" horneado en la imagen). Detalle completo,
+  incluyendo el riesgo de las vulnerabilidades transitorias de esa
+  dependencia, en `docs/challenge-3.md`.
+- **Tabla nueva `cake_designs`, no se reutiliza `cake_requests`**:
+  `cake_requests` tiene columnas `NOT NULL` (`celebration_type`,
+  `preferred_flavor`, `cake_description`) que no aplican al flujo del
+  Reto 3; forzarlas con valores inventados ensuciaría los datos reales del
+  Reto 2. Tabla nueva = cero riesgo para esos datos, cero migración. Mismo
+  patrón de seguridad (RLS sin políticas públicas, solo `service_role`
+  desde Server Action). Se define el esquema exacto en la etapa de
+  persistencia. Ver `docs/challenge-3.md`.
+
 ## 2026-07-13 — Reto 2: endurecer el manejo de la imagen de referencia
 
 - **Columna renombrada**: `reference_image_url` → `reference_image_path`.
