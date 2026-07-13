@@ -105,12 +105,30 @@ export async function submitCakeRequest(
       guest_count: values.guestCount,
       preferred_flavor: values.preferredFlavor,
       cake_description: values.cakeDescription,
-      reference_image_url: referenceImagePath,
+      reference_image_path: referenceImagePath,
     });
 
     if (insertError) throw insertError;
   } catch (error) {
     console.error("[cake-request] fallo al guardar la solicitud", error);
+
+    // La imagen ya se subió pero la solicitud no quedó registrada: borrarla
+    // para no dejar un archivo huérfano en el bucket sin ninguna fila que
+    // lo referencie.
+    if (referenceImagePath) {
+      const supabase = getSupabaseServiceClient();
+      const { error: cleanupError } = await supabase.storage
+        .from(CAKE_REFERENCES_BUCKET)
+        .remove([referenceImagePath]);
+      if (cleanupError) {
+        console.error(
+          "[cake-request] no se pudo limpiar la imagen huérfana",
+          referenceImagePath,
+          cleanupError,
+        );
+      }
+    }
+
     return { ok: false, message: GENERIC_ERROR_MESSAGE };
   }
 

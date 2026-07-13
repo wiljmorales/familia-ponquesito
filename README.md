@@ -29,10 +29,11 @@ de alcance en [`docs/challenge-2.md`](docs/challenge-2.md).
    **SQL Editor** de tu proyecto y ejecútalo. Crea la tabla
    `cake_requests` (con RLS habilitado, sin políticas públicas) y el bucket
    privado `cake-references`.
-3. En **Project Settings → API**, copia la URL del proyecto y la
-   **service role key** a tu `.env.local` (ver `.env.example`). La service
-   role key solo se usa en la Server Action de servidor; nunca se expone
-   al navegador.
+3. En **Project Settings → API Keys**, copia la URL del proyecto y la
+   clave secreta a tu `.env.local` (ver `.env.example`). En proyectos
+   nuevos aparece como **"Secret key"** (`sb_secret_...`); en proyectos
+   más antiguos, como **"service_role"**. Esa clave solo se usa en la
+   Server Action de servidor; nunca se expone al navegador.
 
 ### Probar el formulario en local
 

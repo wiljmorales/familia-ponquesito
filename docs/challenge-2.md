@@ -57,10 +57,10 @@ está en el mockup (prioridad visual del Reto 2). Documentado también en
 ## Decisiones de seguridad y datos (Supabase)
 
 - La tabla `cake_requests` tiene RLS habilitado **sin políticas públicas**.
-  La única vía de lectura/escritura es la service role key, usada
-  exclusivamente en una Server Action de Next.js (nunca en el navegador).
-  No se necesita abrir una política de inserción anónima para un
-  formulario público.
+  La única vía de lectura/escritura es la clave secreta del proyecto
+  ("Secret key" / `service_role`), usada exclusivamente en una Server
+  Action de Next.js (nunca en el navegador). No se necesita abrir una
+  política de inserción anónima para un formulario público.
 - El bucket `cake-references` es **privado** (no público). Las imágenes de
   referencia que suben los clientes son para uso interno de cotización, no
   para publicar; no hace falta que tengan URL pública. `reference_image_url`

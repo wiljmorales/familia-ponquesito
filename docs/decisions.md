@@ -135,3 +135,28 @@ real, nunca antes.
   base de conocimiento del Reto 1 (solo Instagram). El enlace de WhatsApp
   del footer queda tras `NEXT_PUBLIC_WHATSAPP_URL`; sin definir, el ícono
   no se muestra. No se inventó un número.
+
+## 2026-07-13 — Reto 2: endurecer el manejo de la imagen de referencia
+
+- **Columna renombrada**: `reference_image_url` → `reference_image_path`.
+  El nombre anterior era engañoso: nunca se guarda una URL (el bucket es
+  privado), solo la ruta del objeto. `supabase/schema.sql` migra
+  instalaciones existentes con un `rename column` condicional (no se
+  recrea la tabla, no se pierden filas).
+- **Bucket reforzado también del lado de Supabase**: `file_size_limit`
+  (5 MB) y `allowed_mime_types` (jpeg/png/webp) se configuran en
+  `storage.buckets`, no solo se validan en el código de la app. Segunda
+  capa de defensa independiente de la aplicación.
+- **Limpieza de huérfanos**: si la imagen se sube pero el `insert` en
+  `cake_requests` falla después, el Server Action borra el archivo recién
+  subido (`storage.remove`) antes de devolver el error. Si el upload
+  falla, nunca se llega a insertar la solicitud (orden ya era ese; se
+  mantiene). Verificado en vivo contra el proyecto real: se forzó un
+  fallo de insert y se confirmó que el archivo desaparece del bucket.
+- **`getReferenceImageSignedUrl`** (`src/lib/actions/get-reference-image-url.ts`):
+  función server-only que genera una signed URL temporal (`createSignedUrl`,
+  1 hora por defecto) a partir de una ruta. Es la única forma prevista de
+  visualizar una imagen — no se guarda ninguna URL firmada en la base de
+  datos porque expiraría. No está conectada a ninguna pantalla todavía (no
+  hay panel administrativo en este reto); queda lista para cuando exista
+  uno.

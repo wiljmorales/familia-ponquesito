@@ -6,6 +6,9 @@ export const metadata: Metadata = {
   title: "Asistente virtual | Familia Ponquesito",
   description:
     "Pregúntele al asistente virtual de Familia Ponquesito por sabores, tamaños, precios, entregas y cómo hacer su pedido.",
+  alternates: {
+    canonical: "/asistente",
+  },
 };
 
 export default function AsistentePage() {
