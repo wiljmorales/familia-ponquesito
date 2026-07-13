@@ -26,6 +26,11 @@ const TOPPER_SINK_FRACTION = 0.18;
 const CAKE_SINK_FRACTION = 0.3;
 const PLAQUE_TOP_FRACTION = 0.56; // % de la altura propia de la torta
 
+// El pedestal rosado (stand-blush) queda un poco más bajo que el resto del
+// arte a igual escala; se sube en px (fijo, no proporcional al tier) porque
+// el problema es del asset en sí, no de la altura de la torta.
+const STAND_BLUSH_LIFT_PX = 14;
+
 /**
  * -(overlapFraction * widthPercent) / aspectRatio: el margen porcentual
  * de CSS siempre se resuelve contra el ANCHO del contenedor (nunca la
@@ -42,9 +47,10 @@ function sinkMarginPercent(overlapFraction: number, widthPercent: number, option
  * Vista previa de la torta: apila pedestal, torta (con placa + mensaje
  * encima) y topper en flujo normal, con márgenes negativos calculados por
  * imagen para que se superpongan lo justo. El orden en el DOM decide el
- * apilado visual (más abajo = más al frente); z-index corrige el único
- * caso en que eso no basta: la torta debe tapar tanto la base de los
- * palitos del topper como la parte del pedestal que queda debajo.
+ * apilado visual (más abajo = más al frente); z-index corrige los casos
+ * en que eso no basta: el topper siempre va delante de la torta (nunca
+ * debe quedar tapado), y la torta tapa la parte del pedestal que queda
+ * debajo de ella.
  */
 export default function CakeStage({ design }: CakeStageProps) {
   const base = getBaseOption(design.tiers, design.baseVariant);
@@ -63,7 +69,7 @@ export default function CakeStage({ design }: CakeStageProps) {
           style={{
             width: `${TOPPER_WIDTH}%`,
             marginBottom: `${sinkMarginPercent(TOPPER_SINK_FRACTION, TOPPER_WIDTH, topper)}%`,
-            zIndex: 1,
+            zIndex: 3,
           }}
           className="h-auto"
           priority
@@ -119,7 +125,11 @@ export default function CakeStage({ design }: CakeStageProps) {
           alt=""
           width={stand.width}
           height={stand.height}
-          style={{ width: `${STAND_WIDTH}%`, zIndex: 1 }}
+          style={{
+            width: `${STAND_WIDTH}%`,
+            zIndex: 1,
+            transform: stand.id === "stand-blush" ? `translateY(-${STAND_BLUSH_LIFT_PX}px)` : undefined,
+          }}
           className="h-auto"
           priority
         />

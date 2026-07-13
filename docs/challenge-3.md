@@ -323,6 +323,26 @@ ocultos) y se subió `CAKE_SINK_FRACTION` a 0.3 para que la torta se
 asiente mejor sobre el pedestal, según feedback directo probando la app.
 Verificado con los 4 toppers en 1 y 2 pisos.
 
+### Segundo ajuste: topper delante de la torta y pedestal rosado más alto
+
+Feedback directo probando la app: el topper seguía viéndose detrás de la
+torta (el `zIndex` de la torta, más alto, tapaba también la parte
+superior visible del diseño, no solo la base de los palitos como se
+buscaba). Se decidió que el topper simplemente vaya siempre delante:
+subió su `zIndex` de 1 a 3 (por encima del `zIndex: 2` de la torta).
+
+Aparte, el pedestal rosado (`stand-blush`) se veía un poco más bajo que
+el resto del set a la misma escala — problema del asset en sí, no de la
+altura de la torta. Se subió con un `translateY(-14px)` fijo (no
+proporcional al tier), aplicado solo cuando `stand.id === "stand-blush"`,
+para no afectar el pedestal blanco con dorado. 14px es un punto de
+partida razonable para seguir iterando si hace falta ajustar más.
+
+Verificado con capturas: pedestal rosado en 1 y 2 pisos (sin gap visible
+entre torta y pedestal), pedestal blanco sin cambios, y topper
+(Happy Birthday dorado, Princess) completamente visible delante de la
+torta en ambos casos.
+
 ## Preguntas pendientes
 
 - **Incentivo/resultado exacto que recibe la persona.** El brief del reto
