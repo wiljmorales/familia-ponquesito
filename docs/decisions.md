@@ -187,3 +187,20 @@ real, nunca antes.
   datos porque expiraría. No está conectada a ninguna pantalla todavía (no
   hay panel administrativo en este reto); queda lista para cuando exista
   uno.
+
+## 2026-07-13 — Reto 3: ruta, estado del builder y vista previa (Etapa 2)
+
+- **Ruta `/crea-tu-torta`** autocontenida (sin `Header`/`Footer`
+  globales), catálogo de opciones data-driven en
+  `src/lib/cake-builder/options.ts`, estado único (`CakeDesign`) en
+  `useCakeBuilder`. Detalle completo en `docs/challenge-3.md`.
+- **Verificación real, no asumida**: se instaló Playwright temporalmente
+  (`npm install --no-save`, nunca quedó en `package.json`) para conducir
+  el wizard completo en headless Chrome, en escritorio y móvil, con
+  distintas combinaciones de piso/color/pedestal/placa/topper, y así
+  ajustar a ojo los offsets de capas de `CakeStage` contra los assets
+  reales. Se encontró y corrigió un bug real de accesibilidad de paso: el
+  input del mensaje no tenía `id`/`name`, así que su `<label>` no quedaba
+  asociado.
+- **Pendiente a propósito**: el botón "Siguiente" del último paso queda
+  deshabilitado hasta que exista la vista final (Etapa 3).

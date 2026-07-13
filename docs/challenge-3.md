@@ -107,6 +107,44 @@ crema+crema (3 en total) en vez de 5. El enunciado del reto permite esto
 explícitamente ("no es obligatorio ofrecer todas si algunos assets no
 encajan").
 
+## Etapa 2 — Ruta, estado del builder y vista previa
+
+- **Ruta**: `/crea-tu-torta` (App Router), autocontenida como `/asistente`
+  (sin `Header`/`Footer` globales, con un simple "← Volver al inicio").
+- **Catálogo data-driven** (`src/lib/cake-builder/options.ts`): cada paso
+  lee sus opciones de aquí (id, label, ruta de imagen, dimensiones reales
+  para evitar layout shift). Sumar una opción es editar datos, no tocar
+  componentes.
+- **Estado**: un único `CakeDesign` en `useCakeBuilder`
+  (`src/app/crea-tu-torta/use-cake-builder.ts`, colocado junto a la ruta
+  como `/asistente/chat.tsx`). El paso "mensaje" se salta automáticamente
+  si no hay placa seleccionada. Cambiar de 1 a 2 pisos reasigna
+  `baseVariant` a la primera variante de color válida para ese número de
+  pisos (evita quedar con un id de variante que no existe).
+- **`CakeStage`** apila las capas (pedestal, torta, placa + mensaje,
+  topper) con offsets en porcentaje ajustados a ojo contra los assets
+  reales (no hay puntos de anclaje exactos en los PNG fuente). Verificado
+  visualmente con Playwright headless contra 1 piso y 2 pisos, escritorio
+  y móvil, con varias combinaciones de color/pedestal/placa/topper — no
+  solo se asumió que la matemática de CSS funcionaba.
+- **`OptionGrid`** genérico: usado por color, pedestal, placa y topper.
+  Patrón `radiogroup`/`radio` con `aria-checked`, foco visible, objetivo
+  táctil ≥44px, y la selección se marca con borde + fondo + ícono de
+  check (no depende solo del color).
+- **Mobile-first confirmado**: vista previa arriba, controles abajo en
+  móvil; vista previa a la izquierda, controles a la derecha en
+  escritorio (mismo componente, se reordena por breakpoint).
+- **Bug real encontrado y corregido durante la verificación**: el input
+  de mensaje no tenía `id`/`name`, así que su `<label>` no quedaba
+  asociado (`htmlFor` apuntaba a `undefined`) — invisible a simple vista
+  pero real para lectores de pantalla y para `getByLabel` en las pruebas.
+  Corregido en `MessageStep.tsx`.
+- **Limitación conocida y a propósito**: el botón "Siguiente" del último
+  paso (topper) queda deshabilitado — todavía no existe la vista final
+  (Etapa 3). El tamaño de fuente del mensaje sobre la placa es pequeño
+  por el espacio real disponible dentro del marco decorativo; aceptable
+  para el MVP, se puede revisar si el negocio pide mensajes más largos.
+
 ## Preguntas pendientes
 
 - **Incentivo/resultado exacto que recibe la persona.** El brief del reto
