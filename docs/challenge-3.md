@@ -186,20 +186,23 @@ encajan").
   está configurada; el mensaje prellenado se arma con
   `buildWhatsappMessageUrl` (nuevo helper en `src/lib/utils/whatsapp.ts`)
   sin asumir el formato exacto del enlace del negocio.
-- **No se aplicó el cambio de esquema contra el proyecto real de
-  Supabase sin confirmación**: solo se cuenta con la URL del proyecto y la
-  `service_role` key (acceso a datos vía API), no con una conexión directa
-  a Postgres para ejecutar DDL. Crear la tabla `cake_designs` requiere que
-  el dueño del proyecto pegue el `supabase/schema.sql` actualizado en el
-  SQL Editor (mismo flujo ya documentado para el Reto 2).
-- **Verificado localmente sin tocar la base real**: con Playwright headless
-  se recorrió el flujo completo (bienvenida → 6 pasos → vista final →
-  formulario) incluyendo envío. Sin la tabla `cake_designs` creada
-  todavía, el guardado falla con el mensaje amable esperado
-  (`GENERIC_ERROR_MESSAGE`) en vez de un error crudo — confirma que el
-  manejo de errores funciona antes de tener la tabla real disponible. La
-  verificación de un guardado exitoso real queda pendiente de que se
-  aplique el esquema.
+- **El cambio de esquema no se aplicó por mi cuenta**: solo se cuenta con
+  la URL del proyecto y la `service_role` key (acceso a datos vía API), no
+  con una conexión directa a Postgres para ejecutar DDL. El dueño del
+  proyecto pegó el `supabase/schema.sql` actualizado en el SQL Editor
+  (mismo flujo ya documentado para el Reto 2) y creó la tabla
+  `cake_designs`.
+- **Verificado dos veces, antes y después de crear la tabla**: primero con
+  Playwright headless de punta a punta (bienvenida → 6 pasos → vista final
+  → formulario) sin la tabla creada — confirmó que el guardado falla con
+  el mensaje amable esperado (`GENERIC_ERROR_MESSAGE`), no un error crudo.
+  Después de que se aplicó el esquema, se repitió el mismo flujo con datos
+  claramente marcados como prueba ("PRUEBA CLAUDE - borrar") y se
+  consultó directamente la fila insertada en Supabase: `design` (jsonb),
+  `whatsapp` normalizado, `event_date`, `zone`, `source: cake-builder` y
+  `design_code` (`FP-3-2WRZ`) coincidían exactamente con lo enviado. La
+  fila de prueba se borró después de confirmar el guardado, para no dejar
+  un lead falso en la base real.
 - **Pruebas nuevas** (Vitest): `cakeDesignSchema` (rechaza ids fuera de
   catálogo, variantes de base que no corresponden al número de pisos,
   mensajes demasiado largos) y `generateDesignCode` (formato, sin
