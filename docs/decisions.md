@@ -229,3 +229,27 @@ real, nunca antes.
   manejo de errores es correcto antes de tener la tabla disponible.
 - 11 pruebas nuevas (70 en total): validación del diseño contra catálogo y
   formato del código de diseño.
+
+## 2026-07-13 — Reto 3: auditoría de accesibilidad y manejo de errores (Etapa 4)
+
+- **`role="radio"` sin navegación por flechas → botones toggle**: los
+  selectores del builder se anunciaban como grupo de radio ARIA sin
+  implementar el comportamiento de teclado que ese rol exige. Se cambió a
+  `aria-pressed` (Tab + Enter/Espacio), que sí coincide con el
+  comportamiento real, con `aria-labelledby` apuntando al título del
+  paso.
+- **Foco no se movía entre pasos**: el `<h2>` del paso no se remonta al
+  cambiar de paso, así que el foco de teclado quedaba fijo en "Siguiente".
+  Se agregó `tabIndex={-1}` + foco programático en el título de cada paso
+  y de la vista final. Verificado con Playwright navegando solo con
+  teclado.
+- **`submitCakeDesign` sin `try/catch` alrededor de Supabase**: a
+  diferencia de `submit-cake-request.ts` (Reto 2), la llamada a
+  `getSupabaseServiceClient()` y el `insert` no estaban protegidos —
+  variables de entorno faltantes o un fallo de red habrían roto en crudo
+  en vez de mostrar el mensaje amable ya diseñado. Corregido para seguir
+  el mismo patrón que el Reto 2. Verificado guardando y borrando un lead
+  de prueba real después del cambio.
+- Sin `error.tsx`: se evaluó, pero ni el Reto 1 ni el Reto 2 tienen uno;
+  se mantiene consistencia con el resto de la app en vez de introducir un
+  patrón nuevo solo para este reto.

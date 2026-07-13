@@ -10,11 +10,27 @@ interface OptionGridProps {
   onSelect: (id: string | null) => void;
   /** Agrega un tile "Sin ___" al inicio (placa/topper opcionales). */
   noneLabel?: string;
+  /** id del <h2> del paso, para asociar el grupo a su título. */
+  ariaLabelledBy?: string;
 }
 
-export default function OptionGrid({ options, selectedId, onSelect, noneLabel }: OptionGridProps) {
+export default function OptionGrid({
+  options,
+  selectedId,
+  onSelect,
+  noneLabel,
+  ariaLabelledBy,
+}: OptionGridProps) {
+  // Botones tipo "toggle" (aria-pressed), no role="radio": son
+  // navegables con Tab uno por uno y se activan con Enter/Espacio, que es
+  // exactamente su comportamiento real. role="radio" exigiría además
+  // navegación por flechas entre opciones, que no está implementada.
   return (
-    <div role="radiogroup" className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+    <div
+      role="group"
+      aria-labelledby={ariaLabelledBy}
+      className="grid grid-cols-3 gap-3 sm:grid-cols-4"
+    >
       {noneLabel && (
         <OptionTile
           label={noneLabel}
@@ -52,8 +68,7 @@ function OptionTile({
   return (
     <button
       type="button"
-      role="radio"
-      aria-checked={selected}
+      aria-pressed={selected}
       onClick={onClick}
       className={`flex min-h-[44px] flex-col items-center gap-2 rounded-2xl border-2 p-3 text-center transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-terracotta-dark ${
         selected

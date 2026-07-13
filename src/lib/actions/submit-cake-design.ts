@@ -70,32 +70,42 @@ export async function submitCakeDesign(formData: FormData): Promise<SubmitCakeDe
   }
 
   const values = parsedRequest.data;
-  const supabase = getSupabaseServiceClient();
 
-  for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
-    const designCode = generateDesignCode();
-    const { error } = await supabase.from(CAKE_DESIGNS_TABLE).insert({
-      design_code: designCode,
-      design: parsedDesign.data,
-      customer_name: values.customerName,
-      whatsapp: values.whatsapp,
-      email: values.email,
-      event_date: values.eventDate,
-      guest_count: values.guestCount,
-      zone: values.zone,
-    });
+  // getSupabaseServiceClient() lanza si faltan las variables de entorno, y
+  // el insert puede lanzar ante un fallo de red (no solo devolver
+  // {error}). Todo el bloque va en try/catch, igual que
+  // submit-cake-request.ts (Reto 2), para no dejar escapar un error crudo.
+  try {
+    const supabase = getSupabaseServiceClient();
 
-    if (!error) {
-      return { ok: true, message: "¡Tu diseño ya está en manos de Familia Ponquesito!", designCode };
+    for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
+      const designCode = generateDesignCode();
+      const { error } = await supabase.from(CAKE_DESIGNS_TABLE).insert({
+        design_code: designCode,
+        design: parsedDesign.data,
+        customer_name: values.customerName,
+        whatsapp: values.whatsapp,
+        email: values.email,
+        event_date: values.eventDate,
+        guest_count: values.guestCount,
+        zone: values.zone,
+      });
+
+      if (!error) {
+        return { ok: true, message: "¡Tu diseño ya está en manos de Familia Ponquesito!", designCode };
+      }
+
+      if (error.code !== UNIQUE_VIOLATION) {
+        console.error("[cake-design] fallo al guardar el diseño", error);
+        return { ok: false, message: GENERIC_ERROR_MESSAGE };
+      }
+      // Colisión de design_code (poco probable): reintenta con un código nuevo.
     }
 
-    if (error.code !== UNIQUE_VIOLATION) {
-      console.error("[cake-design] fallo al guardar el diseño", error);
-      return { ok: false, message: GENERIC_ERROR_MESSAGE };
-    }
-    // Colisión de design_code (poco probable): reintenta con un código nuevo.
+    console.error("[cake-design] no se pudo generar un código de diseño único");
+    return { ok: false, message: GENERIC_ERROR_MESSAGE };
+  } catch (error) {
+    console.error("[cake-design] fallo inesperado al guardar el diseño", error);
+    return { ok: false, message: GENERIC_ERROR_MESSAGE };
   }
-
-  console.error("[cake-design] no se pudo generar un código de diseño único");
-  return { ok: false, message: GENERIC_ERROR_MESSAGE };
 }

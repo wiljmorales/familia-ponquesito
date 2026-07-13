@@ -208,6 +208,53 @@ encajan").
   mensajes demasiado largos) y `generateDesignCode` (formato, sin
   caracteres ambiguos). 70 pruebas en total (59 previas + 11 nuevas).
 
+## Etapa 4 — Responsive, accesibilidad, manejo de errores y pruebas
+
+Pasada de auditoría sobre lo ya construido en las Etapas 2-3 (no una
+reconstrucción): se buscó activamente qué fallaba, en vez de asumir que
+ya estaba bien por haberse visto correcto visualmente.
+
+- **Bug de accesibilidad real corregido**: los selectores (piso, color,
+  pedestal, placa, topper) usaban `role="radio"`/`role="radiogroup"` sin
+  implementar la navegación por flechas que ese patrón exige en el
+  estándar WAI-ARIA — quien usara solo teclado con un lector de pantalla
+  se habría encontrado con un control que se anuncia como grupo de radio
+  pero no se comporta como uno. Se cambió a botones tipo *toggle*
+  (`aria-pressed`), que sí coinciden con el comportamiento real
+  (Tab entre opciones, Enter/Espacio para activar). Cada grupo quedó
+  asociado a su título de paso vía `aria-labelledby`.
+- **Gestión de foco entre pasos**: el `<h2>` del paso no se remonta al
+  cambiar de paso (persiste en la misma posición del árbol), así que sin
+  intervención el foco de teclado se quedaba fijo en el botón "Siguiente"
+  y quien usa lector de pantalla no se enteraba de que el contenido
+  cambió. Se agregó `tabIndex={-1}` + `focus()` programático en el título
+  de cada paso y en el título de la vista final, patrón estándar para
+  wizards accesibles (el mismo que usa GOV.UK Design System). Verificado
+  con Playwright conduciendo el flujo solo con teclado (Tab + Enter/Espacio,
+  sin mouse): el foco aterriza correctamente en cada título nuevo.
+- **Bug de manejo de errores real corregido**: `submitCakeDesign` llamaba
+  `getSupabaseServiceClient()` y el `insert` fuera de cualquier
+  `try/catch`. `getSupabaseServiceClient()` lanza una excepción si faltan
+  las variables de entorno, y una falla de red también puede lanzar (no
+  solo devolver `{ error }`) — sin envolver esa llamada, cualquiera de los
+  dos casos habría roto en crudo en vez de mostrar el mensaje amable ya
+  diseñado para eso. `submit-cake-request.ts` (Reto 2) sí lo hacía
+  correctamente; se alineó el patrón. Verificado guardando y borrando un
+  lead de prueba real después del cambio, para confirmar que el
+  `try/catch` no alteró el camino exitoso.
+- **Responsive verificado en el viewport más chico común** (320px de
+  ancho, ej. iPhone SE): sin scroll horizontal, grilla de 3 columnas
+  legible, botones de navegación visibles sin recortarse.
+- **Sin `error.tsx`**: se evaluó agregar un error boundary de Next.js para
+  la ruta, pero ni el Reto 1 ni el Reto 2 tienen uno — se decidió no
+  introducir un patrón nuevo solo para este reto y mantener la app
+  consistente consigo misma.
+- 70 pruebas siguen pasando después de todos los cambios de esta etapa
+  (ninguna prueba nueva: los cambios de esta etapa son de accesibilidad y
+  manejo de errores, verificados con Playwright real, no con pruebas
+  unitarias de renderizado — mismo criterio que ya sigue el resto del
+  repo, que no usa Testing Library).
+
 ## Preguntas pendientes
 
 - **Incentivo/resultado exacto que recibe la persona.** El brief del reto

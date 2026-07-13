@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import CakeStage from "./CakeStage";
 import DesignRequestForm from "./DesignRequestForm";
 import Button from "@/components/ui/Button";
@@ -43,6 +43,11 @@ interface FinalViewProps {
 
 export default function FinalView({ design, onEdit, onRestart }: FinalViewProps) {
   const [showForm, setShowForm] = useState(false);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
 
   const tierLabel = TIER_OPTIONS.find((t) => t.tiers === design.tiers)?.label;
   const base = getBaseOption(design.tiers, design.baseVariant);
@@ -67,7 +72,11 @@ export default function FinalView({ design, onEdit, onRestart }: FinalViewProps)
         <CakeStage design={design} />
       </div>
 
-      <h1 className="font-serif text-3xl text-cocoa sm:text-4xl">
+      <h1
+        ref={headingRef}
+        tabIndex={-1}
+        className="font-serif text-3xl text-cocoa outline-none sm:text-4xl"
+      >
         ¡Tu creación está lista!
       </h1>
 

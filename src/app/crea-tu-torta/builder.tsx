@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Button from "@/components/ui/Button";
@@ -27,6 +28,35 @@ const STEP_TITLE: Record<WizardStep, string> = {
   mensaje: "Escribe tu mensaje",
   topper: "Elige tu topper",
 };
+
+const STEP_HEADING_ID = "cake-step-heading";
+
+/**
+ * Mueve el foco al título del paso cada vez que cambia. El h2 persiste en
+ * la misma posición del árbol entre pasos (no se remonta), así que sin
+ * esto el foco de teclado se quedaría "pegado" en el botón Siguiente y
+ * quien usa lector de pantalla no se enteraría de que el contenido
+ * cambió. tabIndex=-1 lo hace enfocable por código sin sumarlo al orden
+ * de tabulación normal.
+ */
+function StepHeading({ step }: { step: WizardStep }) {
+  const ref = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    ref.current?.focus();
+  }, [step]);
+
+  return (
+    <h2
+      ref={ref}
+      id={STEP_HEADING_ID}
+      tabIndex={-1}
+      className="font-serif text-xl text-cocoa outline-none sm:text-2xl"
+    >
+      {STEP_TITLE[step]}
+    </h2>
+  );
+}
 
 export default function Builder() {
   const builder = useCakeBuilder();
@@ -83,9 +113,7 @@ export default function Builder() {
         </div>
 
         <div className="flex flex-col gap-5">
-          <h2 className="font-serif text-xl text-cocoa sm:text-2xl">
-            {STEP_TITLE[currentStep]}
-          </h2>
+          <StepHeading step={currentStep} />
 
           <StepBody builder={builder} step={currentStep} />
 
@@ -125,13 +153,12 @@ function StepBody({
   switch (step) {
     case "tiers":
       return (
-        <div role="radiogroup" className="grid grid-cols-2 gap-3">
+        <div role="group" aria-labelledby={STEP_HEADING_ID} className="grid grid-cols-2 gap-3">
           {TIER_OPTIONS.map((option) => (
             <button
               key={option.tiers}
               type="button"
-              role="radio"
-              aria-checked={design.tiers === option.tiers}
+              aria-pressed={design.tiers === option.tiers}
               onClick={() => builder.selectTiers(option.tiers)}
               className={`flex min-h-[44px] flex-col items-center gap-2 rounded-2xl border-2 p-4 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-terracotta-dark ${
                 design.tiers === option.tiers
@@ -149,6 +176,7 @@ function StepBody({
     case "color":
       return (
         <OptionGrid
+          ariaLabelledBy={STEP_HEADING_ID}
           options={BASE_OPTIONS[design.tiers]}
           selectedId={design.baseVariant}
           onSelect={(id) => id && builder.selectBase(id)}
@@ -157,6 +185,7 @@ function StepBody({
     case "pedestal":
       return (
         <OptionGrid
+          ariaLabelledBy={STEP_HEADING_ID}
           options={STAND_OPTIONS}
           selectedId={design.standVariant}
           onSelect={(id) => id && builder.selectStand(id)}
@@ -165,6 +194,7 @@ function StepBody({
     case "placa":
       return (
         <OptionGrid
+          ariaLabelledBy={STEP_HEADING_ID}
           options={PLAQUE_OPTIONS}
           selectedId={design.plaqueVariant}
           onSelect={builder.selectPlaque}
@@ -178,6 +208,7 @@ function StepBody({
     case "topper":
       return (
         <OptionGrid
+          ariaLabelledBy={STEP_HEADING_ID}
           options={TOPPER_OPTIONS}
           selectedId={design.topperVariant}
           onSelect={builder.selectTopper}
