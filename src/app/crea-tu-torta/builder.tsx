@@ -6,6 +6,7 @@ import Button from "@/components/ui/Button";
 import CakeStage from "@/components/cake-builder/CakeStage";
 import OptionGrid from "@/components/cake-builder/OptionGrid";
 import MessageStep from "@/components/cake-builder/MessageStep";
+import FinalView from "@/components/cake-builder/FinalView";
 import {
   BASE_OPTIONS,
   PLAQUE_OPTIONS,
@@ -16,7 +17,9 @@ import {
 import type { StepId } from "@/lib/cake-builder/types";
 import { useCakeBuilder } from "./use-cake-builder";
 
-const STEP_TITLE: Record<Exclude<StepId, "bienvenida">, string> = {
+type WizardStep = Exclude<StepId, "bienvenida" | "final">;
+
+const STEP_TITLE: Record<WizardStep, string> = {
   tiers: "¿De cuántos pisos la imaginas?",
   color: "Elige el color de tu torta",
   pedestal: "Elige el pedestal",
@@ -57,6 +60,12 @@ export default function Builder() {
     );
   }
 
+  if (currentStep === "final") {
+    return (
+      <FinalView design={design} onEdit={builder.goBack} onRestart={builder.restart} />
+    );
+  }
+
   const progress = ((stepIndex + 1) / steps.length) * 100;
 
   return (
@@ -92,7 +101,6 @@ export default function Builder() {
             <Button
               type="button"
               onClick={builder.goNext}
-              disabled={stepIndex === steps.length - 1}
               className="gap-1"
             >
               Siguiente
@@ -110,7 +118,7 @@ function StepBody({
   step,
 }: {
   builder: ReturnType<typeof useCakeBuilder>;
-  step: Exclude<StepId, "bienvenida">;
+  step: WizardStep;
 }) {
   const { design } = builder;
 

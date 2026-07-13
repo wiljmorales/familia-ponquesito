@@ -16,6 +16,7 @@ export const STEP_ORDER: StepId[] = [
   "placa",
   "mensaje",
   "topper",
+  "final",
 ];
 
 export const MAX_MESSAGE_LENGTH = 40;

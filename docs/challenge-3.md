@@ -145,6 +145,66 @@ encajan").
   por el espacio real disponible dentro del marco decorativo; aceptable
   para el MVP, se puede revisar si el negocio pide mensajes más largos.
 
+## Etapa 3 — Vista final, formulario, persistencia y código de diseño
+
+- **`FinalView`**: al terminar el último paso se oculta el wizard (barra de
+  progreso y controles) y se muestra la torta terminada sobre confeti
+  discreto (CSS puro, sin librería — respeta `prefers-reduced-motion` vía
+  la regla global ya existente en `globals.css`), el título "¡Tu creación
+  está lista!", un resumen en texto del diseño y el CTA "Hacerla
+  realidad". "Editar mi diseño" regresa al wizard sin perder la selección.
+- **Formulario adaptado, no reutilizado literalmente**: `DesignRequestForm`
+  sigue el mismo patrón de `RequestForm` (Reto 2) — mismos primitivos de
+  UI, mismo honeypot, mismos estados idle/success/error, misma regla real
+  de negocio (mínimo 3 días de anticipación, reutilizando
+  `minCelebrationDateString` del Reto 2 en vez de duplicarla) — pero con
+  los campos que pide el Reto 3 (nombre, WhatsApp, fecha del evento,
+  personas, zona de entrega/retiro, correo opcional). No se reutilizó el
+  componente literal porque sus campos no coinciden (sabor, tipo de
+  celebración, descripción larga e imagen no aplican aquí).
+  "Zona de entrega o retiro" es texto libre: no existe una lista cerrada
+  de zonas de cobertura en la base de conocimiento, así que no se inventa
+  un selector con opciones que no están confirmadas.
+- **Validación server-side del diseño, no solo del formulario de
+  contacto**: el JSON del `CakeDesign` que llega del cliente se valida
+  contra el catálogo real de `options.ts` (`cakeDesignSchema` en
+  `src/lib/validations/cake-design.ts`) antes de guardarlo — un id que no
+  exista en el catálogo se rechaza. Así el jsonb en Supabase siempre es
+  reconstruible, incluso ante un cliente manipulado.
+- **Tabla `cake_designs`** creada en `supabase/schema.sql` (ver Etapa 1):
+  RLS habilitado sin políticas públicas, solo `service_role` desde
+  `submitCakeDesign` (Server Action). Guarda el diseño completo en una
+  columna `jsonb` además de los datos de contacto.
+- **Código de diseño** (`FP-3-XXXX`): generado en el servidor
+  (`src/lib/cake-builder/design-code.ts`) con un alfabeto sin caracteres
+  ambiguos (sin `0/O/1/I/L`, se lee y se dicta por WhatsApp). La Server
+  Action reintenta hasta 5 veces ante una colisión de `design_code`
+  (columna `unique`); con 32⁴ combinaciones posibles es un caso extremo,
+  pero se maneja en vez de asumir que nunca pasará.
+- **WhatsApp opcional, sin inventar un número**: igual que el Reto 2, el
+  botón "Continuar por WhatsApp" solo aparece si `NEXT_PUBLIC_WHATSAPP_URL`
+  está configurada; el mensaje prellenado se arma con
+  `buildWhatsappMessageUrl` (nuevo helper en `src/lib/utils/whatsapp.ts`)
+  sin asumir el formato exacto del enlace del negocio.
+- **No se aplicó el cambio de esquema contra el proyecto real de
+  Supabase sin confirmación**: solo se cuenta con la URL del proyecto y la
+  `service_role` key (acceso a datos vía API), no con una conexión directa
+  a Postgres para ejecutar DDL. Crear la tabla `cake_designs` requiere que
+  el dueño del proyecto pegue el `supabase/schema.sql` actualizado en el
+  SQL Editor (mismo flujo ya documentado para el Reto 2).
+- **Verificado localmente sin tocar la base real**: con Playwright headless
+  se recorrió el flujo completo (bienvenida → 6 pasos → vista final →
+  formulario) incluyendo envío. Sin la tabla `cake_designs` creada
+  todavía, el guardado falla con el mensaje amable esperado
+  (`GENERIC_ERROR_MESSAGE`) en vez de un error crudo — confirma que el
+  manejo de errores funciona antes de tener la tabla real disponible. La
+  verificación de un guardado exitoso real queda pendiente de que se
+  aplique el esquema.
+- **Pruebas nuevas** (Vitest): `cakeDesignSchema` (rechaza ids fuera de
+  catálogo, variantes de base que no corresponden al número de pisos,
+  mensajes demasiado largos) y `generateDesignCode` (formato, sin
+  caracteres ambiguos). 70 pruebas en total (59 previas + 11 nuevas).
+
 ## Preguntas pendientes
 
 - **Incentivo/resultado exacto que recibe la persona.** El brief del reto

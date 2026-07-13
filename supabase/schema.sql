@@ -97,3 +97,48 @@ on conflict (id) do update set
 -- las subidas, lecturas y borrados de este bucket solo ocurren desde el
 -- servidor con la service role key (que bypassa RLS y políticas de
 -- Storage por diseño).
+
+-- Familia Ponquesito — Reto 3: leads del cake builder ("Crea tu propia torta")
+--
+-- Tabla nueva y separada de cake_requests a propósito: cake_requests tiene
+-- columnas NOT NULL (celebration_type, preferred_flavor, cake_description)
+-- que no existen en el flujo del Reto 3; forzarlas con valores inventados
+-- ensuciaría los datos reales del Reto 2. Ver docs/challenge-3.md.
+
+create table if not exists public.cake_designs (
+  id uuid primary key default gen_random_uuid(),
+  design_code text not null unique,
+  design jsonb not null,
+  customer_name text not null,
+  whatsapp text not null,
+  email text,
+  event_date date not null,
+  guest_count integer not null,
+  zone text not null,
+  status text not null default 'new',
+  source text not null default 'cake-builder',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint cake_designs_status_check check (
+    status in ('new', 'contacted', 'quoted', 'confirmed', 'cancelled', 'completed')
+  ),
+  constraint cake_designs_guest_count_check check (guest_count > 0)
+);
+
+comment on table public.cake_designs is
+  'Leads capturados desde el juego "Crea tu propia torta" (Reto 3): diseño completo + datos de contacto para preparar una cotización personalizada.';
+comment on column public.cake_designs.design is
+  'Configuración completa del diseño (CakeDesign serializado): permite reconstruirlo sin depender de una imagen guardada.';
+comment on column public.cake_designs.design_code is
+  'Código amigable mostrado al cliente (ej. FP-3-A7K2), generado en el servidor al guardar.';
+
+-- Mismo criterio de seguridad que cake_requests: RLS habilitado y SIN
+-- políticas públicas. La única vía de lectura/escritura es el rol
+-- service_role, usado exclusivamente desde una Server Action de servidor.
+alter table public.cake_designs enable row level security;
+
+drop trigger if exists cake_designs_set_updated_at on public.cake_designs;
+create trigger cake_designs_set_updated_at
+  before update on public.cake_designs
+  for each row
+  execute function public.set_updated_at();

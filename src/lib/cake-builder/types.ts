@@ -26,4 +26,5 @@ export type StepId =
   | "pedestal"
   | "placa"
   | "mensaje"
-  | "topper";
+  | "topper"
+  | "final";

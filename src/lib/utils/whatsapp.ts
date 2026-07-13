@@ -22,3 +22,13 @@ export function normalizeWhatsapp(raw: string): string {
 
   return `+${digits}`;
 }
+
+/**
+ * Agrega un mensaje prellenado a un enlace de WhatsApp del negocio
+ * (`NEXT_PUBLIC_WHATSAPP_URL`), sin asumir su formato exacto: respeta si
+ * ya trae query params propios.
+ */
+export function buildWhatsappMessageUrl(baseUrl: string, message: string): string {
+  const separator = baseUrl.includes("?") ? "&" : "?";
+  return `${baseUrl}${separator}text=${encodeURIComponent(message)}`;
+}

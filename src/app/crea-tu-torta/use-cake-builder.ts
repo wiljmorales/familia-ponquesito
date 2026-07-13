@@ -61,6 +61,11 @@ export function useCakeBuilder() {
     setStepIndex(steps.indexOf("tiers"));
   }
 
+  function restart() {
+    setDesign(DEFAULT_DESIGN);
+    setStepIndex(0);
+  }
+
   return {
     design,
     steps,
@@ -75,6 +80,7 @@ export function useCakeBuilder() {
     goNext,
     goBack,
     start,
+    restart,
   };
 }
 

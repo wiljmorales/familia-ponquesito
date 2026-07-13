@@ -204,3 +204,28 @@ real, nunca antes.
   asociado.
 - **Pendiente a propósito**: el botón "Siguiente" del último paso queda
   deshabilitado hasta que exista la vista final (Etapa 3).
+
+## 2026-07-13 — Reto 3: vista final, formulario, persistencia y código (Etapa 3)
+
+- **Tabla `cake_designs`** agregada a `supabase/schema.sql` (RLS sin
+  políticas públicas, solo `service_role`). **No se aplicó contra el
+  proyecto real de Supabase**: solo hay acceso a la API con la
+  `service_role` key, no a una conexión directa a Postgres para ejecutar
+  DDL. Queda pendiente que el dueño del proyecto pegue el script
+  actualizado en el SQL Editor (mismo flujo que el Reto 2).
+- **Formulario adaptado** (`DesignRequestForm`), no reutilizado literal de
+  `RequestForm`: mismos primitivos de UI, honeypot y estados
+  idle/success/error, pero campos distintos (los del Reto 3). Reutiliza
+  `minCelebrationDateString` del Reto 2 en vez de duplicar la regla de
+  anticipación mínima.
+- **Validación server-side del `CakeDesign`** contra el catálogo real de
+  `options.ts`, no solo tipos — un id fuera de catálogo se rechaza antes
+  de guardar.
+- **Código de diseño `FP-3-XXXX`** generado en servidor con alfabeto sin
+  caracteres ambiguos, con reintento ante colisión (columna `unique`).
+- **Verificado localmente sin tocar la base real**: flujo completo con
+  Playwright headless hasta el envío; sin la tabla creada todavía, falla
+  con el mensaje amable esperado (no un error crudo) — confirma que el
+  manejo de errores es correcto antes de tener la tabla disponible.
+- 11 pruebas nuevas (70 en total): validación del diseño contra catálogo y
+  formato del código de diseño.
