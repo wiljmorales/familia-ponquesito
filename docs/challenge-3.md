@@ -343,6 +343,16 @@ entre torta y pedestal), pedestal blanco sin cambios, y topper
 (Happy Birthday dorado, Princess) completamente visible delante de la
 torta en ambos casos.
 
+### Tercer ajuste: lift del pedestal rosado por número de pisos
+
+Feedback directo: el pedestal rosado necesitaba subir un poco más,
+distinto según el número de pisos. Se agregó un extra sobre los 14px
+base: +8px cuando la torta es de un piso (22px total) y +4px cuando es
+de dos pisos (18px total). Es un ajuste puramente visual, sin relación
+geométrica con la altura real de la torta — valores de partida para
+seguir iterando si hace falta. Verificado con capturas en ambos casos,
+sin gap visible.
+
 ## Preguntas pendientes
 
 - **Incentivo/resultado exacto que recibe la persona.** El brief del reto

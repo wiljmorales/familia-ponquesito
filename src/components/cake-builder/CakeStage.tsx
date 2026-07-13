@@ -27,9 +27,13 @@ const CAKE_SINK_FRACTION = 0.3;
 const PLAQUE_TOP_FRACTION = 0.56; // % de la altura propia de la torta
 
 // El pedestal rosado (stand-blush) queda un poco más bajo que el resto del
-// arte a igual escala; se sube en px (fijo, no proporcional al tier) porque
-// el problema es del asset en sí, no de la altura de la torta.
+// arte a igual escala; se sube en px (fijo, no proporcional al ancho del
+// stage) porque el problema es del asset en sí, no de la altura de la
+// torta. El extra por número de pisos es puramente ajuste visual pedido
+// por feedback directo probando la app (no hay una razón geométrica).
 const STAND_BLUSH_LIFT_PX = 14;
+const STAND_BLUSH_LIFT_EXTRA_ONE_TIER_PX = 8;
+const STAND_BLUSH_LIFT_EXTRA_TWO_TIER_PX = 4;
 
 /**
  * -(overlapFraction * widthPercent) / aspectRatio: el margen porcentual
@@ -57,6 +61,10 @@ export default function CakeStage({ design }: CakeStageProps) {
   const stand = getStandOption(design.standVariant);
   const plaque = getPlaqueOption(design.plaqueVariant);
   const topper = getTopperOption(design.topperVariant);
+
+  const standBlushLiftPx =
+    STAND_BLUSH_LIFT_PX +
+    (design.tiers === 1 ? STAND_BLUSH_LIFT_EXTRA_ONE_TIER_PX : STAND_BLUSH_LIFT_EXTRA_TWO_TIER_PX);
 
   return (
     <div className="mx-auto flex w-full max-w-sm select-none flex-col items-center">
@@ -128,7 +136,7 @@ export default function CakeStage({ design }: CakeStageProps) {
           style={{
             width: `${STAND_WIDTH}%`,
             zIndex: 1,
-            transform: stand.id === "stand-blush" ? `translateY(-${STAND_BLUSH_LIFT_PX}px)` : undefined,
+            transform: stand.id === "stand-blush" ? `translateY(-${standBlushLiftPx}px)` : undefined,
           }}
           className="h-auto"
           priority
