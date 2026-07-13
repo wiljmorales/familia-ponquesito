@@ -353,6 +353,12 @@ geométrica con la altura real de la torta — valores de partida para
 seguir iterando si hace falta. Verificado con capturas en ambos casos,
 sin gap visible.
 
+### Cuarto ajuste: +4px más en 1 piso
+
+Feedback directo: el extra de 1 piso pasó de 8px a 12px (26px total
+sobre el pedestal rosado; el de 2 pisos queda igual, 18px). Verificado
+con captura, sin gap visible.
+
 ## Preguntas pendientes
 
 - **Incentivo/resultado exacto que recibe la persona.** El brief del reto

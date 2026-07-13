@@ -32,7 +32,7 @@ const PLAQUE_TOP_FRACTION = 0.56; // % de la altura propia de la torta
 // torta. El extra por número de pisos es puramente ajuste visual pedido
 // por feedback directo probando la app (no hay una razón geométrica).
 const STAND_BLUSH_LIFT_PX = 14;
-const STAND_BLUSH_LIFT_EXTRA_ONE_TIER_PX = 8;
+const STAND_BLUSH_LIFT_EXTRA_ONE_TIER_PX = 12;
 const STAND_BLUSH_LIFT_EXTRA_TWO_TIER_PX = 4;
 
 /**
