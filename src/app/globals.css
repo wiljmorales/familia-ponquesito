@@ -1,37 +1,74 @@
 @import "tailwindcss";
 
 /*
- * Paleta cálida PROVISIONAL (pastelería: cremas, caramelo, cacao).
- * No es la identidad oficial de Familia Ponquesito — se reemplazará cuando
- * la marca defina sus lineamientos. Ver docs/decisions.md.
+ * Identidad visual oficial de Familia Ponquesito (Reto 2).
+ * Fuente: sistema de diseño entregado por el negocio. Reemplaza la paleta
+ * provisional del Reto 1 (ver docs/decisions.md).
  */
 :root {
-  --background: #fdf6ee;
-  --foreground: #43302b;
-  --surface: #fffdfa;
-  --border-soft: #ecdcc9;
-  --accent: #b4633a;
-  --accent-strong: #9a4f2b;
-  --accent-soft: #f7e8db;
-  --muted: #8d7266;
+  --cream: #f8f1e7;
+  --cream-light: #fffaf5;
+  --terracotta: #c7654c;
+  --terracotta-dark: #a94f3e;
+  --cocoa: #3d3331;
+  --gold: #dba94e;
+  --blush: #dfa9aa;
+  --yellow: #f4bd44;
+  --border-soft: #ead8ca;
+  --text-primary: #3d3331;
+  --text-secondary: #746963;
   color-scheme: light;
+
+  /* Alias heredados del Reto 1 (chat en /asistente) para que siga usando
+     la misma paleta de marca sin reescribir sus clases. */
+  --background: var(--cream-light);
+  --foreground: var(--text-primary);
+  --surface: var(--cream-light);
+  --accent: var(--terracotta);
+  --accent-strong: var(--terracotta-dark);
+  --accent-soft: color-mix(in srgb, var(--terracotta) 14%, var(--cream-light));
+  --muted: var(--text-secondary);
 }
 
 @theme inline {
+  --color-cream: var(--cream);
+  --color-cream-light: var(--cream-light);
+  --color-terracotta: var(--terracotta);
+  --color-terracotta-dark: var(--terracotta-dark);
+  --color-cocoa: var(--cocoa);
+  --color-gold: var(--gold);
+  --color-blush: var(--blush);
+  --color-yellow: var(--yellow);
+  --color-border-soft: var(--border-soft);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
-  --color-border-soft: var(--border-soft);
   --color-accent: var(--accent);
   --color-accent-strong: var(--accent-strong);
   --color-accent-soft: var(--accent-soft);
   --color-muted: var(--muted);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+
+  --font-serif: var(--font-playfair);
+  --font-sans: var(--font-inter);
+  --font-script: var(--font-sacramento);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--cream-light);
+  color: var(--text-primary);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

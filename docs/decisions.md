@@ -100,3 +100,63 @@ real, nunca antes.
   global. Cubre el caso realista del challenge (un curioso o un bot simple
   en bucle); un ataque distribuido requeriría un limitador externo
   (p. ej. Redis), infraestructura que decidimos no añadir para este reto.
+
+## 2026-07-12 — Reto 2: landing de producto, `/` cambia de dueño
+
+- **`/` pasa a ser la landing de Familia Ponquesito** (Reto 2). El chat del
+  Reto 1 se movió a `/asistente` (mismo componente, sin cambios de lógica).
+  Motivo: la landing es ahora la cara pública del negocio; mover el chat a
+  su propia ruta lo mantiene evaluable de forma independiente sin forzar
+  un link adicional en el nav que no está en el mockup entregado. Detalle
+  completo en `docs/challenge-2.md`.
+- **Paleta y tipografía oficiales**: reemplazan la paleta provisional del
+  Reto 1 en `globals.css`. Los tokens antiguos (`--accent`, `--muted`, etc.)
+  se dejaron como alias de los nuevos para que `/asistente` siga
+  funcionando sin reescribir sus clases.
+- **Fotografía real**: se usaron 6 fotos de tortas entregadas por WhatsApp
+  durante la sesión (no estaban en los 3 adjuntos de diseño) para el hero,
+  la galería y el cierre. No hay fotos reales de corte por sabor, así que
+  "Sabores" usa color sólido de marca + ícono en vez de foto — no se generó
+  ninguna imagen con IA ni se usó stock. Ver preguntas pendientes en
+  `docs/challenge-2.md`.
+- **Ícono de header/footer**: el logo entregado es un lockup único (ícono +
+  texto + tagline). Se recortó solo el ícono (cupcake + monograma) del
+  archivo real para el header/footer compacto; el wordmark "Familia
+  Ponquesito" se renderiza como texto real (fuente Sacramento) en vez de
+  usar el logo rasterizado completo, por accesibilidad y nitidez en
+  cualquier tamaño.
+- **Supabase — bucket privado y sin políticas RLS públicas**: la tabla
+  `cake_requests` y el bucket `cake-references` solo son accesibles con la
+  service role key desde una Server Action de servidor. No se abrió
+  inserción anónima vía RLS para el formulario público; se evita porque el
+  servidor ya media cada escritura con su propia validación. Detalle en
+  `docs/challenge-2.md` y `supabase/schema.sql`.
+- **WhatsApp de negocio no confirmado**: no hay número documentado en la
+  base de conocimiento del Reto 1 (solo Instagram). El enlace de WhatsApp
+  del footer queda tras `NEXT_PUBLIC_WHATSAPP_URL`; sin definir, el ícono
+  no se muestra. No se inventó un número.
+
+## 2026-07-13 — Reto 2: endurecer el manejo de la imagen de referencia
+
+- **Columna renombrada**: `reference_image_url` → `reference_image_path`.
+  El nombre anterior era engañoso: nunca se guarda una URL (el bucket es
+  privado), solo la ruta del objeto. `supabase/schema.sql` migra
+  instalaciones existentes con un `rename column` condicional (no se
+  recrea la tabla, no se pierden filas).
+- **Bucket reforzado también del lado de Supabase**: `file_size_limit`
+  (5 MB) y `allowed_mime_types` (jpeg/png/webp) se configuran en
+  `storage.buckets`, no solo se validan en el código de la app. Segunda
+  capa de defensa independiente de la aplicación.
+- **Limpieza de huérfanos**: si la imagen se sube pero el `insert` en
+  `cake_requests` falla después, el Server Action borra el archivo recién
+  subido (`storage.remove`) antes de devolver el error. Si el upload
+  falla, nunca se llega a insertar la solicitud (orden ya era ese; se
+  mantiene). Verificado en vivo contra el proyecto real: se forzó un
+  fallo de insert y se confirmó que el archivo desaparece del bucket.
+- **`getReferenceImageSignedUrl`** (`src/lib/actions/get-reference-image-url.ts`):
+  función server-only que genera una signed URL temporal (`createSignedUrl`,
+  1 hora por defecto) a partir de una ruta. Es la única forma prevista de
+  visualizar una imagen — no se guarda ninguna URL firmada en la base de
+  datos porque expiraría. No está conectada a ninguna pantalla todavía (no
+  hay panel administrativo en este reto); queda lista para cuando exista
+  uno.
