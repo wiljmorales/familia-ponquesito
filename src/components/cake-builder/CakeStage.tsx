@@ -22,8 +22,8 @@ const PLAQUE_WIDTH = 34;
 // una torta de 2 pisos es bastante más alta que una de 1 piso con el
 // mismo ancho — un offset fijo relativo al stage descuadraba el topper
 // en cuanto cambiaba el número de pisos).
-const TOPPER_SINK_FRACTION = 0.65;
-const CAKE_SINK_FRACTION = 0.22;
+const TOPPER_SINK_FRACTION = 0.18;
+const CAKE_SINK_FRACTION = 0.3;
 const PLAQUE_TOP_FRACTION = 0.56; // % de la altura propia de la torta
 
 /**

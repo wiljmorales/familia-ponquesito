@@ -309,6 +309,20 @@ Verificado con capturas reales en varias combinaciones (1 y 2 pisos, con
 y sin placa/topper, escritorio y móvil) después del arreglo, incluyendo
 la combinación exacta que reportó el usuario.
 
+### Ajuste posterior: el topper quedaba tapado por la torta
+
+El primer valor de `TOPPER_SINK_FRACTION` (0.65, pensado solo con datos
+del pedestal/torta) resultó demasiado agresivo para los toppers: al
+tener `zIndex` más alto que el topper, la torta terminaba tapando ~65%
+de su altura — no solo los palitos, sino buena parte del diseño
+decorativo. Se midió, para cada topper, en qué punto de la altura total
+el contenido se angosta a solo los dos palitos (entre ~16% y ~40% según
+el diseño, con bastante variación). Se bajó a 0.18 (conservador: prioriza
+que el diseño se vea completo sobre que los palitos queden perfectamente
+ocultos) y se subió `CAKE_SINK_FRACTION` a 0.3 para que la torta se
+asiente mejor sobre el pedestal, según feedback directo probando la app.
+Verificado con los 4 toppers en 1 y 2 pisos.
+
 ## Preguntas pendientes
 
 - **Incentivo/resultado exacto que recibe la persona.** El brief del reto
