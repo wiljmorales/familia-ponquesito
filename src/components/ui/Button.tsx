@@ -35,7 +35,7 @@ export default function Button({
   const content = (
     <>
       {loading && <Loader2 aria-hidden className="size-4 animate-spin" />}
-      <span>{children}</span>
+      {children}
       {withHeart && !loading && <HeartIcon className="size-4" />}
     </>
   );
