@@ -35,6 +35,10 @@ const STAND_BLUSH_LIFT_PX = 14;
 const STAND_BLUSH_LIFT_EXTRA_ONE_TIER_PX = 12;
 const STAND_BLUSH_LIFT_EXTRA_TWO_TIER_PX = 4;
 
+// Ajuste visual pedido tras probar la app: en tortas de un piso la placa
+// dedicatoria queda un poco baja respecto al resto del diseño.
+const PLAQUE_LIFT_ONE_TIER_PX = 12;
+
 /**
  * -(overlapFraction * widthPercent) / aspectRatio: el margen porcentual
  * de CSS siempre se resuelve contra el ANCHO del contenedor (nunca la
@@ -107,7 +111,10 @@ export default function CakeStage({ design }: CakeStageProps) {
               className="absolute left-1/2 -translate-x-1/2"
               style={{
                 width: `${(PLAQUE_WIDTH / CAKE_WIDTH) * 100}%`,
-                top: `${PLAQUE_TOP_FRACTION * 100}%`,
+                top:
+                  design.tiers === 1
+                    ? `calc(${PLAQUE_TOP_FRACTION * 100}% - ${PLAQUE_LIFT_ONE_TIER_PX}px)`
+                    : `${PLAQUE_TOP_FRACTION * 100}%`,
               }}
             >
               <Image

@@ -359,6 +359,14 @@ Feedback directo: el extra de 1 piso pasó de 8px a 12px (26px total
 sobre el pedestal rosado; el de 2 pisos queda igual, 18px). Verificado
 con captura, sin gap visible.
 
+### Quinto ajuste: sube la placa dedicatoria en tortas de un piso
+
+Feedback directo: en tortas de un piso la placa quedaba un poco baja.
+Se sube 12px (vía `top: calc(56% - 12px)` en vez de `transform`, para no
+pisar el `-translate-x-1/2` de Tailwind que ya centra la placa
+horizontalmente). Solo aplica cuando `design.tiers === 1`; en 2 pisos
+la placa queda igual. Verificado con captura en ambos casos.
+
 ## Preguntas pendientes
 
 - **Incentivo/resultado exacto que recibe la persona.** El brief del reto
