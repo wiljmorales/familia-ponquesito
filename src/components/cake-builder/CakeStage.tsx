@@ -16,6 +16,7 @@ const STAND_WIDTH = 82;
 const CAKE_WIDTH = 58;
 const TOPPER_WIDTH = 20;
 const PLAQUE_WIDTH = 34;
+const PLAQUE_WIDTH_TWO_TIER_SCALE = 0.85;
 
 // Fracción de la altura PROPIA de cada capa que se hunde en la capa de
 // abajo (no una altura fija: cada asset tiene su propio recorte real, y
@@ -37,7 +38,8 @@ const STAND_BLUSH_LIFT_EXTRA_TWO_TIER_PX = 4;
 
 // Ajuste visual pedido tras probar la app: en tortas de un piso la placa
 // dedicatoria queda un poco baja respecto al resto del diseño.
-const PLAQUE_LIFT_ONE_TIER_PX = 12;
+const PLAQUE_LIFT_ONE_TIER_PX = 32;
+const PLAQUE_LOWER_TWO_TIER_PX = 4;
 
 /**
  * -(overlapFraction * widthPercent) / aspectRatio: el margen porcentual
@@ -110,11 +112,11 @@ export default function CakeStage({ design }: CakeStageProps) {
             <div
               className="absolute left-1/2 -translate-x-1/2"
               style={{
-                width: `${(PLAQUE_WIDTH / CAKE_WIDTH) * 100}%`,
+                width: `${((design.tiers === 2 ? PLAQUE_WIDTH * PLAQUE_WIDTH_TWO_TIER_SCALE : PLAQUE_WIDTH) / CAKE_WIDTH) * 100}%`,
                 top:
                   design.tiers === 1
                     ? `calc(${PLAQUE_TOP_FRACTION * 100}% - ${PLAQUE_LIFT_ONE_TIER_PX}px)`
-                    : `${PLAQUE_TOP_FRACTION * 100}%`,
+                    : `calc(${PLAQUE_TOP_FRACTION * 100}% + ${PLAQUE_LOWER_TWO_TIER_PX}px)`,
               }}
             >
               <Image
@@ -125,7 +127,7 @@ export default function CakeStage({ design }: CakeStageProps) {
                 className="h-auto w-full"
               />
               {design.message && (
-                <p className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden px-[26%] py-[30%] text-center font-script text-[0.5rem] leading-[1.1] text-cocoa sm:text-[0.7rem]">
+                <p className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden px-[26%] py-[30%] text-center font-script text-[1rem] leading-[1.1] text-cocoa sm:text-[0.9rem]">
                   {design.message}
                 </p>
               )}

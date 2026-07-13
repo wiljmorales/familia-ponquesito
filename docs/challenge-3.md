@@ -367,7 +367,21 @@ pisar el `-translate-x-1/2` de Tailwind que ya centra la placa
 horizontalmente). Solo aplica cuando `design.tiers === 1`; en 2 pisos
 la placa queda igual. Verificado con captura en ambos casos.
 
-## Preguntas pendientes
+### Sexto ajuste: placa en 2 pisos, tamaño de la dedicatoria e interlineado
+
+Serie de ajustes finos pedidos en vivo por el usuario mientras probaba la
+app directamente (sin captura de por medio en cada paso, para ahorrar
+tokens; verificado por el usuario en el navegador):
+
+- Placa en tortas de 2 pisos: 15% más chica (`PLAQUE_WIDTH_TWO_TIER_SCALE
+  = 0.85`) y bajada 4px (`PLAQUE_LOWER_TWO_TIER_PX`, vía el mismo patrón
+  `top: calc(...)` que ya usaba el ajuste de 1 piso).
+- Tamaño de fuente de la dedicatoria: subido de `0.5rem`/`0.7rem` (base/
+  `sm`) a `1rem`/`0.9rem`. Nota: con este valor final, el texto se ve más
+  grande en mobile que en `sm` (≥640px) — quedó así porque el pedido fue
+  solo sobre el valor base; pendiente de revisar si se quiere igualar.
+- Interlineado: se probó subirlo a `1.5` y se revirtió a `1.1` (valor
+  original).
 
 - **Incentivo/resultado exacto que recibe la persona.** El brief del reto
   (aportado por ChatGPT) ya define el flujo completo (ver vista final +
