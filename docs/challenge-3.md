@@ -383,6 +383,16 @@ tokens; verificado por el usuario en el navegador):
 - Interlineado: se probó subirlo a `1.5` y se revirtió a `1.1` (valor
   original).
 
+### Séptimo ajuste: centrado vertical en desktop
+
+Reporte del usuario: en desktop el contenido del wizard se veía centrado
+horizontalmente pero pegado arriba en vertical. La fila del `lg:grid`
+(imagen de la torta + panel del paso) tenía `lg:items-start`; al
+`align-content` por defecto de un grid con una sola fila estirarse para
+llenar el `flex-1` del contenedor padre, el contenido quedaba arriba de
+esa fila estirada en vez de centrado dentro de ella. Cambiado a
+`lg:items-center`. Verificado en 1440×900 y 1280×720 sin recortes.
+
 - **Incentivo/resultado exacto que recibe la persona.** El brief del reto
   (aportado por ChatGPT) ya define el flujo completo (ver vista final +
   formulario de cotización personalizada), pero el dueño del proyecto

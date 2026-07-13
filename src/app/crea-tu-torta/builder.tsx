@@ -100,14 +100,14 @@ export default function Builder() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="h-1 w-full bg-border-soft">
+      <div className="h-1 w-full shrink-0 bg-border-soft">
         <div
           className="h-full bg-terracotta transition-all"
           style={{ width: `${progress}%` }}
         />
       </div>
 
-      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:grid lg:grid-cols-[1fr_1fr] lg:items-start lg:gap-10 lg:py-10">
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:grid lg:grid-cols-[1fr_1fr] lg:items-center lg:gap-10 lg:py-10">
         <div className="lg:sticky lg:top-6">
           <CakeStage design={design} />
         </div>
