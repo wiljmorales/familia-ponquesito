@@ -1,5 +1,5 @@
 import "server-only";
-import { Resend } from "resend";
+import nodemailer, { type Transporter } from "nodemailer";
 
 export interface SendEmailInput {
   to: string;
@@ -10,7 +10,7 @@ export interface SendEmailInput {
 
 export interface SendEmailResult {
   ok: boolean;
-  /** Id devuelto por el proveedor (Resend) cuando el envío tiene éxito. */
+  /** Id devuelto por el proveedor (messageId de Nodemailer) cuando el envío tiene éxito. */
   providerId?: string;
   /** Mensaje seguro para logs/eventos; nunca incluye secretos. */
   error?: string;
@@ -20,24 +20,50 @@ export interface EmailClient {
   send(input: SendEmailInput): Promise<SendEmailResult>;
 }
 
-function toSafeErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-  return "Error desconocido al enviar el correo.";
+/**
+ * Convierte cualquier error en un mensaje apto para logs y para
+ * lead_automation_events. Además de normalizar el tipo, redacta la
+ * contraseña de aplicación por si el proveedor la incluyera en el texto
+ * del error — un secreto jamás debe llegar a un log ni a la base de datos.
+ */
+function toSafeErrorMessage(error: unknown, secret?: string): string {
+  let message: string;
+  if (error instanceof Error) message = error.message;
+  else if (typeof error === "string") message = error;
+  else message = "Error desconocido al enviar el correo.";
+
+  if (secret) message = message.split(secret).join("[redactado]");
+  return message;
 }
 
-class ResendEmailClient implements EmailClient {
-  private readonly client: Resend;
-  private readonly from: string;
+interface SmtpConfig {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  pass: string;
+  from: string;
+}
 
-  constructor(apiKey: string, from: string) {
-    this.client = new Resend(apiKey);
-    this.from = from;
+class SmtpEmailClient implements EmailClient {
+  private readonly transporter: Transporter;
+  private readonly from: string;
+  private readonly pass: string;
+
+  constructor(config: SmtpConfig) {
+    this.transporter = nodemailer.createTransport({
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      auth: { user: config.user, pass: config.pass },
+    });
+    this.from = config.from;
+    this.pass = config.pass;
   }
 
   async send(input: SendEmailInput): Promise<SendEmailResult> {
     try {
-      const { data, error } = await this.client.emails.send({
+      const info = await this.transporter.sendMail({
         from: this.from,
         to: input.to,
         subject: input.subject,
@@ -45,13 +71,9 @@ class ResendEmailClient implements EmailClient {
         text: input.text,
       });
 
-      if (error) {
-        return { ok: false, error: error.message || "El proveedor de correo rechazó el envío." };
-      }
-
-      return { ok: true, providerId: data?.id };
+      return { ok: true, providerId: info.messageId };
     } catch (error) {
-      return { ok: false, error: toSafeErrorMessage(error) };
+      return { ok: false, error: toSafeErrorMessage(error, this.pass) };
     }
   }
 }
@@ -59,8 +81,8 @@ class ResendEmailClient implements EmailClient {
 /**
  * Solo para desarrollo/test: registra en consola en vez de enviar un
  * correo real. Nunca se usa en producción (ver defaultEmailClient) — así
- * `npm run dev` y `npm test` funcionan sin credenciales de Resend, igual
- * que el proveedor determinista del asistente sin GEMINI_API_KEY.
+ * `npm run dev` y `npm test` funcionan sin credenciales SMTP, igual que
+ * el proveedor determinista del asistente sin GEMINI_API_KEY.
  */
 class DevLoggerEmailClient implements EmailClient {
   async send(input: SendEmailInput): Promise<SendEmailResult> {
@@ -70,7 +92,7 @@ class DevLoggerEmailClient implements EmailClient {
 }
 
 /**
- * En producción, si falta configuración real de Resend, este cliente
+ * En producción, si falta configuración real de SMTP, este cliente
  * siempre devuelve un error explícito: nunca simula un envío exitoso.
  */
 class MisconfiguredEmailClient implements EmailClient {
@@ -85,23 +107,39 @@ class MisconfiguredEmailClient implements EmailClient {
 }
 
 /**
- * Mismo patrón que defaultProvider() en src/assistant/service.ts: con
- * RESEND_API_KEY + RESEND_FROM_EMAIL configuradas se usa el cliente real.
- * Sin ellas, en desarrollo/test se usa un stub que solo loguea; en
- * producción se usa un cliente que siempre falla de forma explícita y
- * registrable, nunca en silencio.
+ * Mismo patrón que defaultProvider() en src/assistant/service.ts: con las
+ * variables SMTP completas se usa el transportador real de Nodemailer
+ * (Gmail vía contraseña de aplicación, nunca la contraseña normal). Sin
+ * ellas, en desarrollo/test se usa un stub que solo loguea; en producción
+ * se usa un cliente que siempre falla de forma explícita y registrable,
+ * nunca en silencio.
  */
 export function defaultEmailClient(): EmailClient {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL;
+  const host = process.env.SMTP_HOST;
+  const portRaw = process.env.SMTP_PORT;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_APP_PASSWORD;
+  const from = process.env.EMAIL_FROM;
 
-  if (apiKey && from) {
-    return new ResendEmailClient(apiKey, from);
+  const port = Number(portRaw);
+  const missingVars = [
+    !host && "SMTP_HOST",
+    !portRaw && "SMTP_PORT",
+    portRaw && !(Number.isInteger(port) && port > 0) && "SMTP_PORT (debe ser un número entero)",
+    !user && "SMTP_USER",
+    !pass && "SMTP_APP_PASSWORD",
+    !from && "EMAIL_FROM",
+  ].filter((v): v is string => Boolean(v));
+
+  if (host && user && pass && from && missingVars.length === 0) {
+    // Sin SMTP_SECURE explícito, se infiere del puerto: 465 es SMTPS
+    // (TLS implícito); cualquier otro (587, 25) arranca en claro y
+    // negocia STARTTLS.
+    const secureRaw = process.env.SMTP_SECURE;
+    const secure = secureRaw === undefined || secureRaw === "" ? port === 465 : secureRaw === "true";
+
+    return new SmtpEmailClient({ host, port, secure, user, pass, from });
   }
-
-  const missingVars = [!apiKey && "RESEND_API_KEY", !from && "RESEND_FROM_EMAIL"].filter(
-    (v): v is string => Boolean(v),
-  );
 
   if (process.env.NODE_ENV === "production") {
     return new MisconfiguredEmailClient(missingVars);

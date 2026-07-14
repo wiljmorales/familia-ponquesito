@@ -34,7 +34,7 @@ interface LeadRow {
 export interface ProcessLeadDeps {
   /** Inyectable para pruebas; por defecto el cliente real (service_role). */
   supabase?: SupabaseClient;
-  /** Inyectable para pruebas; por defecto Resend o el stub de desarrollo. */
+  /** Inyectable para pruebas; por defecto SMTP (Nodemailer) o el stub de desarrollo. */
   emailClient?: EmailClient;
   /** Inyectable para pruebas; por defecto process.env.KAREM_NOTIFICATION_EMAIL. */
   karemEmail?: string;
