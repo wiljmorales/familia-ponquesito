@@ -341,3 +341,15 @@ incluyendo la combinación exacta reportada.
   reintentos externa**: fuera de alcance explícito, igual criterio que los
   Retos 2 y 3. Detalle completo, incluyendo el flujo de extremo a extremo y
   las variables de entorno nuevas, en `docs/challenge-4.md`.
+- **Verificado de extremo a extremo con envío real** (local y Preview de
+  Vercel): ambos flujos (Reto 2 y Reto 3) probados con Playwright dirigido
+  contra la app real, confirmando en Supabase que el lead se registra, se
+  clasifica y ambos correos llegan con éxito (`providerId` real de Resend
+  en `lead_automation_events.metadata`). Sin dominio propio verificado en
+  Resend, el remitente de prueba (`onboarding@resend.dev`) solo puede
+  enviar al correo del dueño de la cuenta de Resend — se usó ese mismo
+  correo como destinatario de prueba en todos los casos. No se puede usar
+  el subdominio `*.vercel.app` del deploy para verificar un dominio en
+  Resend (su DNS lo administra Vercel, no el dueño del proyecto). Queda
+  documentado como pendiente en `docs/challenge-4.md` para cuando el
+  negocio defina un dominio propio.

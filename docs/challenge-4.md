@@ -58,6 +58,24 @@ de entorno `KAREM_NOTIFICATION_EMAIL` (nunca versionada — vive solo en
 `.env.local`/Vercel). Cuando exista un correo real de negocio, basta con
 cambiar el valor de esa variable; no requiere tocar código.
 
+## Pendiente: verificar un dominio propio en Resend
+
+Sin un dominio verificado en Resend, `RESEND_FROM_EMAIL` solo puede ser
+`onboarding@resend.dev`, y ese remitente de prueba **solo puede enviar al
+correo del dueño de la cuenta de Resend** — no a clientes reales ni a
+ningún otro destinatario. Es una restricción de la plataforma (requiere
+agregar registros DNS TXT/DKIM en el proveedor del dominio), no algo que se
+resuelva agregando destinatarios de prueba.
+
+Familia Ponquesito no tiene dominio propio hoy (solo Instagram, según
+`src/knowledge/familia-ponquesito.md`); no se puede usar el subdominio
+`*.vercel.app` del deploy porque su DNS lo administra Vercel, no el dueño
+del proyecto. Verificado end-to-end en Preview y local usando el correo
+personal del dueño del proyecto como único destinatario de prueba (ver
+`docs/decisions.md`). Cuando el negocio defina un dominio propio, verificarlo
+en Resend y actualizar `RESEND_FROM_EMAIL` es el único paso pendiente para
+enviar a clientes reales — sin cambios de código.
+
 ## Clasificación de prioridad
 
 Basada en días de anticipación entre hoy y la fecha de celebración/evento,
