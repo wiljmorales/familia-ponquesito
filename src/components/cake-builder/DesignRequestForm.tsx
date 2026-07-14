@@ -217,10 +217,12 @@ export default function DesignRequestForm({ design, onRestart }: DesignRequestFo
       />
 
       <InputField
-        label="Correo (opcional)"
+        label="Correo"
+        required
         type="email"
         placeholder="tucorreo@ejemplo.com"
         autoComplete="email"
+        hint="Te enviaremos la confirmación de tu diseño aquí."
         error={errors.email?.message}
         {...register("email")}
       />

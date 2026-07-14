@@ -1,9 +1,12 @@
 "use server";
 
+import { after } from "next/server";
 import { cakeDesignRequestSchema, cakeDesignSchema } from "@/lib/validations/cake-design";
 import { generateDesignCode } from "@/lib/cake-builder/design-code";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import { CAKE_DESIGNS_TABLE } from "@/lib/supabase/config";
+import { processLead } from "@/leads/service";
+import { describeCakeDesign } from "@/lib/cake-builder/design-summary";
 
 export interface SubmitCakeDesignResult {
   ok: boolean;
@@ -80,18 +83,43 @@ export async function submitCakeDesign(formData: FormData): Promise<SubmitCakeDe
 
     for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
       const designCode = generateDesignCode();
-      const { error } = await supabase.from(CAKE_DESIGNS_TABLE).insert({
-        design_code: designCode,
-        design: parsedDesign.data,
-        customer_name: values.customerName,
-        whatsapp: values.whatsapp,
-        email: values.email,
-        event_date: values.eventDate,
-        guest_count: values.guestCount,
-        zone: values.zone,
-      });
+      const { data: inserted, error } = await supabase
+        .from(CAKE_DESIGNS_TABLE)
+        .insert({
+          design_code: designCode,
+          design: parsedDesign.data,
+          customer_name: values.customerName,
+          whatsapp: values.whatsapp,
+          email: values.email,
+          event_date: values.eventDate,
+          guest_count: values.guestCount,
+          zone: values.zone,
+        })
+        .select("id")
+        .single();
 
       if (!error) {
+        // Igual que en submit-cake-request.ts: la automatización corre
+        // después de responder, para que un fallo de correo nunca demore
+        // ni bloquee la confirmación del diseño ya guardado.
+        after(() =>
+          processLead({
+            source: "cake_design",
+            sourceId: inserted.id,
+            customerName: values.customerName,
+            customerWhatsapp: values.whatsapp,
+            customerEmail: values.email,
+            celebrationDate: values.eventDate,
+            summaryLines: describeCakeDesign(parsedDesign.data),
+            normalizedPayload: {
+              design: parsedDesign.data,
+              guestCount: values.guestCount,
+              zone: values.zone,
+            },
+            referenceCode: designCode,
+          }),
+        );
+
         return { ok: true, message: "¡Tu diseño ya está en manos de Familia Ponquesito!", designCode };
       }
 

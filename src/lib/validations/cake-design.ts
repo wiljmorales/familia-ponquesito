@@ -55,8 +55,11 @@ export const cakeDesignRequestSchema = z.object({
     .transform(normalizeWhatsapp),
 
   email: z
-    .union([z.literal(""), z.string().trim().max(160).email("Ingresa un correo válido.")])
-    .transform((value) => (value ? value : null)),
+    .string()
+    .trim()
+    .min(1, "Ingresa tu correo.")
+    .max(160, "El correo es demasiado largo.")
+    .email("Ingresa un correo válido."),
 
   eventDate: z
     .string()

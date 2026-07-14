@@ -287,3 +287,84 @@ fondo. Tres causas independientes, las tres corregidas:
 
 Verificado con capturas reales en varias combinaciones tras el arreglo,
 incluyendo la combinación exacta reportada.
+
+## 2026-07-13 — Reto 4: automatización de leads (registro + correo + WhatsApp)
+
+- **Rama**: `reto-4/maquina-de-leads`, creada desde `main` (que ya contenía
+  los Retos 2 y 3 completos, verificado con `git merge-base --is-ancestor`
+  antes de crear la rama).
+- **El Reto 2 nunca recolectó correo del cliente**: se descubrió al
+  inspeccionar `RequestForm.tsx`/`cake-request.ts` antes de implementar.
+  Aprobado por el dueño del proyecto: se agrega el campo, **obligatorio**,
+  a ambos formularios (Reto 2 desde cero, Reto 3 pasa de opcional a
+  obligatorio). La columna nueva `cake_requests.email` es nullable a
+  propósito (no romper filas previas); lo obligatorio se aplica en
+  Zod/UI para envíos nuevos. Detalle completo en `docs/challenge-4.md`.
+- **Correo de Karem sin dato real confirmado**: no existe en la base de
+  conocimiento (solo Instagram). El dueño del proyecto autorizó usar un
+  correo de pruebas personal vía `KAREM_NOTIFICATION_EMAIL`, nunca
+  versionado.
+- **Tablas nuevas `leads` y `lead_automation_events`** en
+  `supabase/schema.sql`, aditivas, RLS sin políticas públicas. Se omitió
+  `status` en `leads` (evita una segunda fuente de verdad divergente del
+  `status` que ya tienen `cake_requests`/`cake_designs`) y `updated_at`
+  (los leads no se editan después de creados).
+- **Clasificación de prioridad sobre el calendario de America/Caracas**, no
+  el huso horario del servidor (Vercel corre en UTC) — `src/leads/classify.ts`,
+  probado en los límites exactos (2, 3, 4, 5, 10, 11 días).
+- **`processLead` corre dentro de `after()`** (Next.js, estable, compatible
+  con Vercel), después de responder al usuario: un correo lento o caído
+  nunca demora ni bloquea la confirmación de que la solicitud ya se guardó.
+  Nunca lanza hacia afuera; todo fallo queda en logs y en
+  `lead_automation_events`.
+- **Idempotencia real, no solo la restricción `unique`**: antes de cada
+  envío se consulta si ya existe un evento `success` para ese
+  `lead_id` + `event_type`; solo se reintenta lo que falló antes. Probado
+  corriendo `processLead` dos veces sobre el mismo lead.
+- **Correo al cliente y correo a Karem son independientes**: el fallo de
+  uno no afecta al otro. Un solo reintento por envío dentro de la misma
+  ejecución.
+- **Nunca se simula éxito de correo en producción**: sin la configuración
+  SMTP completa (`SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_APP_PASSWORD`/
+  `EMAIL_FROM`) o sin `KAREM_NOTIFICATION_EMAIL`, en producción cada paso
+  queda registrado como `error` explícito; el stub que solo loguea en
+  consola es exclusivo de desarrollo/test (mismo patrón que
+  `defaultProvider()` del asistente, Reto 1).
+- **Plantillas de correo con funciones HTML simples** (sin React Email),
+  con escape de todo texto del cliente y asunto que nunca interpola texto
+  libre (solo código de referencia, prioridad y origen, generados por el
+  servidor).
+- **Generador de código de referencia extraído a `src/lib/reference-code.ts`**,
+  reutilizado por `generateDesignCode()` (Reto 3, sin cambios de
+  comportamiento) y por los leads del Reto 2 (prefijo `FP-2`); los leads
+  del Reto 3 reutilizan el `design_code` ya generado como `reference_code`.
+- **Sin panel administrativo, sin imagen generada del diseño, sin cola de
+  reintentos externa**: fuera de alcance explícito, igual criterio que los
+  Retos 2 y 3. Detalle completo, incluyendo el flujo de extremo a extremo y
+  las variables de entorno nuevas, en `docs/challenge-4.md`.
+- **Verificado de extremo a extremo con envío real** (local y Preview de
+  Vercel, con el proveedor original Resend — ver siguiente punto): ambos
+  flujos (Reto 2 y Reto 3) probados con Playwright dirigido contra la app
+  real, confirmando en Supabase que el lead se registra, se clasifica y
+  ambos correos llegan con éxito (`providerId` real del proveedor en
+  `lead_automation_events.metadata`).
+- **Migración de Resend a SMTP de Gmail (Nodemailer)**: sin dominio propio
+  verificado, el remitente de prueba de Resend (`onboarding@resend.dev`)
+  solo podía enviar al correo del dueño de la cuenta — inservible para
+  confirmar solicitudes a clientes reales, y el negocio no tiene dominio
+  propio (el DNS de `*.vercel.app` lo administra Vercel). Se reemplazó
+  solo la capa de transporte en `src/email/client.ts` por Nodemailer
+  contra el SMTP de una cuenta Gmail exclusiva del negocio, con contraseña
+  de aplicación (nunca la contraseña normal, nunca versionada — solo
+  `.env.local` y Vercel). `processLead`, las plantillas, la idempotencia,
+  la clasificación y las Server Actions no cambiaron; el `messageId` de
+  Nodemailer ocupa el lugar del id de Resend como `providerId`. Detalle y
+  limitaciones de Gmail SMTP en `docs/challenge-4.md`. Verificado de
+  extremo a extremo en local con envío real: ambos flujos (Reto 2 y
+  Reto 3) probados por el dueño del proyecto con ambos correos recibidos,
+  más una pasada automatizada (Playwright) confirmando en
+  `lead_automation_events` los tres eventos en `success` con `providerId`
+  de Gmail, cero fugas de la contraseña en logs, y el camino de
+  producción mal configurada registrando `error` explícito sin perder el
+  lead. Pendiente solo la verificación en Vercel Preview cuando las
+  variables estén configuradas allí.

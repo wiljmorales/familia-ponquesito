@@ -1,10 +1,13 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
+import { after } from "next/server";
 import { cakeRequestSchema, MAX_IMAGE_SIZE_BYTES } from "@/lib/validations/cake-request";
 import { detectImageType, extensionForImageType } from "@/lib/utils/image-signature";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import { CAKE_REFERENCES_BUCKET, CAKE_REQUESTS_TABLE } from "@/lib/supabase/config";
+import { processLead } from "@/leads/service";
+import { describeCakeRequest } from "@/leads/cake-request-summary";
 
 export interface SubmitCakeRequestResult {
   ok: boolean;
@@ -29,6 +32,7 @@ export async function submitCakeRequest(
   const parsed = cakeRequestSchema.safeParse({
     customerName: formData.get("customerName"),
     whatsapp: formData.get("whatsapp"),
+    email: formData.get("email"),
     celebrationDate: formData.get("celebrationDate"),
     celebrationType: formData.get("celebrationType"),
     guestCount: formData.get("guestCount"),
@@ -97,18 +101,52 @@ export async function submitCakeRequest(
 
   try {
     const supabase = getSupabaseServiceClient();
-    const { error: insertError } = await supabase.from(CAKE_REQUESTS_TABLE).insert({
-      customer_name: values.customerName,
-      whatsapp: values.whatsapp,
-      celebration_date: values.celebrationDate,
-      celebration_type: values.celebrationType,
-      guest_count: values.guestCount,
-      preferred_flavor: values.preferredFlavor,
-      cake_description: values.cakeDescription,
-      reference_image_path: referenceImagePath,
-    });
+    const { data: inserted, error: insertError } = await supabase
+      .from(CAKE_REQUESTS_TABLE)
+      .insert({
+        customer_name: values.customerName,
+        whatsapp: values.whatsapp,
+        email: values.email,
+        celebration_date: values.celebrationDate,
+        celebration_type: values.celebrationType,
+        guest_count: values.guestCount,
+        preferred_flavor: values.preferredFlavor,
+        cake_description: values.cakeDescription,
+        reference_image_path: referenceImagePath,
+      })
+      .select("id")
+      .single();
 
     if (insertError) throw insertError;
+
+    // La automatización (registrar el lead, clasificarlo, enviar los
+    // correos) corre después de responder al usuario: un fallo de correo
+    // nunca debe bloquear ni demorar la confirmación de que su solicitud
+    // ya quedó guardada (eso ya ocurrió arriba).
+    after(() =>
+      processLead({
+        source: "cake_request",
+        sourceId: inserted.id,
+        customerName: values.customerName,
+        customerWhatsapp: values.whatsapp,
+        customerEmail: values.email,
+        celebrationDate: values.celebrationDate,
+        summaryLines: describeCakeRequest({
+          celebrationType: values.celebrationType,
+          guestCount: values.guestCount,
+          preferredFlavor: values.preferredFlavor,
+          cakeDescription: values.cakeDescription,
+        }),
+        normalizedPayload: {
+          celebrationType: values.celebrationType,
+          guestCount: values.guestCount,
+          preferredFlavor: values.preferredFlavor,
+          cakeDescription: values.cakeDescription,
+          referenceImagePath,
+        },
+        referenceImagePath,
+      }),
+    );
   } catch (error) {
     console.error("[cake-request] fallo al guardar la solicitud", error);
 

@@ -21,6 +21,7 @@ import {
 interface RequestFormValues {
   customerName: string;
   whatsapp: string;
+  email: string;
   celebrationDate: string;
   celebrationType: string;
   guestCount: string;
@@ -32,6 +33,7 @@ interface RequestFormValues {
 const DEFAULT_VALUES: RequestFormValues = {
   customerName: "",
   whatsapp: "",
+  email: "",
   celebrationDate: "",
   celebrationType: "",
   guestCount: "",
@@ -105,6 +107,7 @@ export default function RequestForm() {
     const formData = new FormData();
     formData.set("customerName", values.customerName);
     formData.set("whatsapp", values.whatsapp);
+    formData.set("email", values.email);
     formData.set("celebrationDate", values.celebrationDate);
     formData.set("celebrationType", values.celebrationType);
     formData.set("guestCount", String(values.guestCount));
@@ -213,6 +216,17 @@ export default function RequestForm() {
                   {...register("whatsapp")}
                 />
               </div>
+
+              <InputField
+                label="Correo"
+                required
+                type="email"
+                placeholder="tucorreo@ejemplo.com"
+                autoComplete="email"
+                hint="Te enviaremos la confirmación de tu solicitud aquí."
+                error={errors.email?.message}
+                {...register("email")}
+              />
 
               <div className="grid gap-5 sm:grid-cols-3">
                 <InputField

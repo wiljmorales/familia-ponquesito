@@ -60,20 +60,25 @@ describe("cakeDesignRequestSchema", () => {
   const VALID_REQUEST = {
     customerName: "Ana Pérez",
     whatsapp: "04141234567",
-    email: "",
+    email: "ana@example.com",
     eventDate: futureDateString(5),
     guestCount: "20",
     zone: "Este de Barquisimeto",
     companyWebsite: "",
   };
 
-  it("acepta una solicitud válida y normaliza el WhatsApp y el correo vacío", () => {
+  it("acepta una solicitud válida y normaliza el WhatsApp", () => {
     const result = cakeDesignRequestSchema.safeParse(VALID_REQUEST);
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.whatsapp).toBe("+584141234567");
-      expect(result.data.email).toBeNull();
+      expect(result.data.email).toBe("ana@example.com");
     }
+  });
+
+  it("rechaza un correo vacío (ahora obligatorio)", () => {
+    const result = cakeDesignRequestSchema.safeParse({ ...VALID_REQUEST, email: "" });
+    expect(result.success).toBe(false);
   });
 
   it("rechaza una fecha con menos de 3 días de anticipación", () => {
@@ -92,7 +97,7 @@ describe("cakeDesignRequestSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rechaza un correo con formato inválido cuando se completa", () => {
+  it("rechaza un correo con formato inválido", () => {
     const result = cakeDesignRequestSchema.safeParse({
       ...VALID_REQUEST,
       email: "no-es-un-correo",

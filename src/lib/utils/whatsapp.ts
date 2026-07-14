@@ -32,3 +32,17 @@ export function buildWhatsappMessageUrl(baseUrl: string, message: string): strin
   const separator = baseUrl.includes("?") ? "&" : "?";
   return `${baseUrl}${separator}text=${encodeURIComponent(message)}`;
 }
+
+/**
+ * Enlace de wa.me para que Karem contacte AL CLIENTE (no al negocio), con
+ * un mensaje precargado. Distinto de buildWhatsappMessageUrl: no depende
+ * de NEXT_PUBLIC_WHATSAPP_URL, usa el número que el propio cliente dejó en
+ * el lead (ya normalizado a formato internacional por normalizeWhatsapp).
+ */
+export function buildCustomerContactWhatsappLink(
+  customerWhatsapp: string,
+  message: string,
+): string {
+  const digits = customerWhatsapp.replace(/\D/g, "");
+  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+}
