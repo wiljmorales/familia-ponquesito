@@ -48,6 +48,13 @@ export const cakeRequestSchema = z.object({
     }, "Ingresa un número de WhatsApp válido.")
     .transform(normalizeWhatsapp),
 
+  email: z
+    .string()
+    .trim()
+    .min(1, "Ingresa tu correo.")
+    .max(160, "El correo es demasiado largo.")
+    .email("Ingresa un correo válido."),
+
   celebrationDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Selecciona una fecha válida.")
