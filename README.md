@@ -104,7 +104,7 @@ tortas sin azúcar?"* (admite que no sabe), *"Quiero encargar una torta"*
 
 Next.js 16 (App Router) · TypeScript · Tailwind CSS 4 · React Hook Form +
 Zod · Supabase (Postgres + Storage) · Google Gemini (`@google/genai`,
-salida estructurada con JSON Schema) · Resend (correo transaccional) ·
+salida estructurada con JSON Schema) · Nodemailer (correo por SMTP de Gmail) ·
 lucide-react · Vitest.
 
 ## Arquitectura (mínima a propósito)
@@ -119,7 +119,7 @@ Landing (/)                          Asistente (/asistente)
             └─ after(() => processLead())  ← src/leads/service.ts (Reto 4)
                  ├─ tabla leads
                  ├─ tabla lead_automation_events
-                 └─ correos (src/email/) vía Resend
+                 └─ correos (src/email/) vía SMTP de Gmail (Nodemailer)
 ```
 
 El asistente incluye rate limiting (10 req/min/IP), validación estricta de
@@ -151,17 +151,20 @@ cada una):
   Supabase arriba).
 - `NEXT_PUBLIC_WHATSAPP_URL` — opcional; sin ella, el footer no muestra el
   enlace de WhatsApp (no hay número de negocio confirmado todavía).
-- `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `KAREM_NOTIFICATION_EMAIL` —
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`,
+  `SMTP_APP_PASSWORD`, `EMAIL_FROM`, `KAREM_NOTIFICATION_EMAIL` —
   necesarias para que la automatización de leads (Reto 4) envíe correos
-  reales. Sin ellas, en desarrollo/test se usa un stub que solo loguea en
-  consola (no envía nada); en producción, cada paso de correo sin
-  configurar queda registrado como error explícito, nunca como éxito
-  simulado. Detalle en [`docs/challenge-4.md`](docs/challenge-4.md).
+  reales por el SMTP de la cuenta Gmail del negocio (contraseña de
+  aplicación, nunca la contraseña normal). Sin ellas, en desarrollo/test
+  se usa un stub que solo loguea en consola (no envía nada); en
+  producción, cada paso de correo sin configurar queda registrado como
+  error explícito, nunca como éxito simulado. Detalle en
+  [`docs/challenge-4.md`](docs/challenge-4.md).
 
 Pruebas y lint:
 
 ```bash
-npm test      # 135 pruebas (no consumen cuota de Gemini ni tocan Supabase/Resend)
+npm test      # 139 pruebas (no consumen cuota de Gemini ni tocan Supabase/SMTP)
 npm run lint
 npm run build
 ```

@@ -58,23 +58,33 @@ de entorno `KAREM_NOTIFICATION_EMAIL` (nunca versionada — vive solo en
 `.env.local`/Vercel). Cuando exista un correo real de negocio, basta con
 cambiar el valor de esa variable; no requiere tocar código.
 
-## Pendiente: verificar un dominio propio en Resend
+## Proveedor de correo: SMTP de Gmail vía Nodemailer
 
-Sin un dominio verificado en Resend, `RESEND_FROM_EMAIL` solo puede ser
-`onboarding@resend.dev`, y ese remitente de prueba **solo puede enviar al
-correo del dueño de la cuenta de Resend** — no a clientes reales ni a
-ningún otro destinatario. Es una restricción de la plataforma (requiere
-agregar registros DNS TXT/DKIM en el proveedor del dominio), no algo que se
-resuelva agregando destinatarios de prueba.
+Los correos salen por el SMTP de una cuenta Gmail exclusiva del negocio,
+usando Nodemailer con una **contraseña de aplicación** (nunca la contraseña
+normal de la cuenta; requiere verificación en dos pasos). Ni la dirección ni
+la contraseña viven en el código: todo llega por variables de entorno
+(`.env.local` local, variables del proyecto en Vercel).
 
-Familia Ponquesito no tiene dominio propio hoy (solo Instagram, según
-`src/knowledge/familia-ponquesito.md`); no se puede usar el subdominio
-`*.vercel.app` del deploy porque su DNS lo administra Vercel, no el dueño
-del proyecto. Verificado end-to-end en Preview y local usando el correo
-personal del dueño del proyecto como único destinatario de prueba (ver
-`docs/decisions.md`). Cuando el negocio defina un dominio propio, verificarlo
-en Resend y actualizar `RESEND_FROM_EMAIL` es el único paso pendiente para
-enviar a clientes reales — sin cambios de código.
+**Nota histórica:** la primera versión de este reto usó Resend, pero sin
+dominio propio verificado su remitente de prueba solo podía enviar al correo
+del dueño de la cuenta — inservible para confirmar solicitudes a clientes
+reales. Como Familia Ponquesito no tiene dominio propio hoy (solo Instagram,
+según `src/knowledge/familia-ponquesito.md`) y el DNS de `*.vercel.app` lo
+administra Vercel, se reemplazó Resend por una cuenta Gmail del negocio, que
+sí puede enviar a cualquier destinatario sin verificar dominio.
+
+Limitaciones conocidas de Gmail SMTP a tener en cuenta:
+
+- Límite de envío de una cuenta Gmail gratuita: ~500 destinatarios por día
+  (holgado para el volumen actual de leads; si el negocio crece, migrar a
+  un dominio propio + proveedor transaccional es el camino).
+- Gmail reescribe el remitente si no coincide con la cuenta autenticada:
+  `EMAIL_FROM` debe usar la misma dirección que `SMTP_USER` (el nombre
+  visible sí es libre, p. ej. `Familia Ponquesito <cuenta@gmail.com>`).
+- La entregabilidad depende de la reputación de gmail.com; correos
+  transaccionales desde Gmail pueden caer en "Promociones" en algunos
+  clientes de correo.
 
 ## Clasificación de prioridad
 
@@ -136,8 +146,8 @@ de cada envío, el servicio consulta si ya existe un evento con
 - Si `customer_email` ya tuvo éxito, no se reenvía.
 - Si `owner_email` ya tuvo éxito, no se reenvía.
 - Un intento fallido sí puede reintentarse en una ejecución posterior.
-- El id devuelto por Resend se guarda en `metadata.providerId` cuando el
-  envío tiene éxito.
+- El `messageId` devuelto por Nodemailer se guarda en `metadata.providerId`
+  cuando el envío tiene éxito.
 
 Cubierto en `src/leads/service.test.ts`, incluyendo una prueba que corre
 `processLead` dos veces sobre el mismo lead y confirma que no se duplican
@@ -156,14 +166,21 @@ misma ejecución de `processLead`.
 asistente (Reto 1: con `GEMINI_API_KEY` usa el proveedor real, sin ella usa
 el determinista solo en desarrollo/test):
 
-- Con `RESEND_API_KEY` + `RESEND_FROM_EMAIL` configuradas: cliente real de
-  Resend.
+- Con `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_APP_PASSWORD` y
+  `EMAIL_FROM` configuradas: transportador SMTP real de Nodemailer.
+  `SMTP_PORT` se convierte a número y `SMTP_SECURE` a booleano (si se
+  omite, se infiere del puerto: TLS implícito solo en 465). Un
+  `SMTP_PORT` no numérico cuenta como configuración inválida, no como
+  éxito.
 - Sin ellas, en desarrollo/test: un stub que solo loguea en consola (no
-  envía nada real; así `npm run dev` y `npm test` funcionan sin cuenta de
-  Resend).
+  envía nada real; así `npm run dev` y `npm test` funcionan sin cuenta
+  SMTP ni red).
 - Sin ellas, en producción: un cliente que **siempre devuelve error
   explícito** — nunca simula un envío exitoso. El paso queda registrado
-  como `error` en `lead_automation_events`.
+  como `error` en `lead_automation_events`. El mensaje solo nombra las
+  variables faltantes, jamás sus valores; además, la contraseña de
+  aplicación se redacta de cualquier error que devuelva el proveedor
+  antes de llegar a logs o eventos.
 - Si falta `KAREM_NOTIFICATION_EMAIL` (en cualquier entorno): no hay a quién
   enviar, así que ni siquiera se intenta — se registra el error
   directamente, sin llamar al proveedor de correo.

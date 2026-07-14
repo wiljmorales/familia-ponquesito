@@ -324,11 +324,12 @@ incluyendo la combinación exacta reportada.
 - **Correo al cliente y correo a Karem son independientes**: el fallo de
   uno no afecta al otro. Un solo reintento por envío dentro de la misma
   ejecución.
-- **Nunca se simula éxito de correo en producción**: sin
-  `RESEND_API_KEY`/`RESEND_FROM_EMAIL`/`KAREM_NOTIFICATION_EMAIL`, en
-  producción cada paso queda registrado como `error` explícito; el stub
-  que solo loguea en consola es exclusivo de desarrollo/test (mismo
-  patrón que `defaultProvider()` del asistente, Reto 1).
+- **Nunca se simula éxito de correo en producción**: sin la configuración
+  SMTP completa (`SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_APP_PASSWORD`/
+  `EMAIL_FROM`) o sin `KAREM_NOTIFICATION_EMAIL`, en producción cada paso
+  queda registrado como `error` explícito; el stub que solo loguea en
+  consola es exclusivo de desarrollo/test (mismo patrón que
+  `defaultProvider()` del asistente, Reto 1).
 - **Plantillas de correo con funciones HTML simples** (sin React Email),
   con escape de todo texto del cliente y asunto que nunca interpola texto
   libre (solo código de referencia, prioridad y origen, generados por el
@@ -342,14 +343,20 @@ incluyendo la combinación exacta reportada.
   Retos 2 y 3. Detalle completo, incluyendo el flujo de extremo a extremo y
   las variables de entorno nuevas, en `docs/challenge-4.md`.
 - **Verificado de extremo a extremo con envío real** (local y Preview de
-  Vercel): ambos flujos (Reto 2 y Reto 3) probados con Playwright dirigido
-  contra la app real, confirmando en Supabase que el lead se registra, se
-  clasifica y ambos correos llegan con éxito (`providerId` real de Resend
-  en `lead_automation_events.metadata`). Sin dominio propio verificado en
-  Resend, el remitente de prueba (`onboarding@resend.dev`) solo puede
-  enviar al correo del dueño de la cuenta de Resend — se usó ese mismo
-  correo como destinatario de prueba en todos los casos. No se puede usar
-  el subdominio `*.vercel.app` del deploy para verificar un dominio en
-  Resend (su DNS lo administra Vercel, no el dueño del proyecto). Queda
-  documentado como pendiente en `docs/challenge-4.md` para cuando el
-  negocio defina un dominio propio.
+  Vercel, con el proveedor original Resend — ver siguiente punto): ambos
+  flujos (Reto 2 y Reto 3) probados con Playwright dirigido contra la app
+  real, confirmando en Supabase que el lead se registra, se clasifica y
+  ambos correos llegan con éxito (`providerId` real del proveedor en
+  `lead_automation_events.metadata`).
+- **Migración de Resend a SMTP de Gmail (Nodemailer)**: sin dominio propio
+  verificado, el remitente de prueba de Resend (`onboarding@resend.dev`)
+  solo podía enviar al correo del dueño de la cuenta — inservible para
+  confirmar solicitudes a clientes reales, y el negocio no tiene dominio
+  propio (el DNS de `*.vercel.app` lo administra Vercel). Se reemplazó
+  solo la capa de transporte en `src/email/client.ts` por Nodemailer
+  contra el SMTP de una cuenta Gmail exclusiva del negocio, con contraseña
+  de aplicación (nunca la contraseña normal, nunca versionada — solo
+  `.env.local` y Vercel). `processLead`, las plantillas, la idempotencia,
+  la clasificación y las Server Actions no cambiaron; el `messageId` de
+  Nodemailer ocupa el lugar del id de Resend como `providerId`. Detalle y
+  limitaciones de Gmail SMTP en `docs/challenge-4.md`.
