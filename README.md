@@ -13,6 +13,30 @@ Challenge**. El repositorio evoluciona reto a reto (ver
 | `/crea-tu-torta` | Juego "Crea tu propia torta": decora una torta paso a paso y deja tus datos para recibir una cotización personalizada inspirada en tu diseño (persistido en Supabase). | Reto 3 |
 | `/asistente` | Chat del asistente virtual que responde con la base de conocimiento real del negocio y admite lo que no sabe. | Reto 1 |
 
+Los leads de `/` y `/crea-tu-torta` se procesan automáticamente (Reto 4):
+registro y clasificación, correo de confirmación al cliente, correo interno
+a Karem con enlace de WhatsApp precargado. Ver más abajo.
+
+## Reto 4 — "La máquina de leads que trabaja sola"
+
+Cuando cualquiera de los dos formularios se envía con éxito, un servicio
+central (`src/leads/service.ts`) corre en segundo plano (vía `after()` de
+Next.js, sin bloquear la respuesta al usuario):
+
+1. Registra el lead en una tabla común (`leads`) y lo clasifica por
+   anticipación (`not_viable` / `urgent` / `high` / `normal`, calculado
+   sobre el calendario de Caracas).
+2. Envía un correo de confirmación al cliente, personalizado por origen.
+3. Envía un correo interno a Karem con el resumen completo, prioridad y un
+   enlace de WhatsApp precargado para contactar al cliente.
+4. Registra cada paso (éxito o error) en `lead_automation_events`, de forma
+   idempotente: un reintento posterior nunca duplica un correo ya enviado
+   con éxito.
+
+Un fallo de correo nunca borra ni bloquea el lead ya guardado en
+`cake_requests`/`cake_designs`. Detalle completo, riesgos y decisiones en
+[`docs/challenge-4.md`](docs/challenge-4.md).
+
 ## Reto 3 — "Crea tu propia torta": captura de leads con un juego
 
 Wizard mobile-first para decorar una torta (piso, color, pedestal, placa
@@ -42,9 +66,10 @@ de alcance en [`docs/challenge-2.md`](docs/challenge-2.md).
 1. Crea un proyecto en [supabase.com](https://supabase.com).
 2. Copia el contenido de [`supabase/schema.sql`](supabase/schema.sql) en el
    **SQL Editor** de tu proyecto y ejecútalo (es idempotente: puedes
-   volver a correrlo sin duplicar nada). Crea las tablas `cake_requests` y
-   `cake_designs` (ambas con RLS habilitado, sin políticas públicas) y el
-   bucket privado `cake-references`.
+   volver a correrlo sin duplicar nada). Crea las tablas `cake_requests`,
+   `cake_designs`, `leads` y `lead_automation_events` (todas con RLS
+   habilitado, sin políticas públicas) y el bucket privado
+   `cake-references`.
 3. En **Project Settings → API Keys**, copia la URL del proyecto y la
    clave secreta a tu `.env.local` (ver `.env.example`). En proyectos
    nuevos aparece como **"Secret key"** (`sb_secret_...`); en proyectos
@@ -79,7 +104,8 @@ tortas sin azúcar?"* (admite que no sabe), *"Quiero encargar una torta"*
 
 Next.js 16 (App Router) · TypeScript · Tailwind CSS 4 · React Hook Form +
 Zod · Supabase (Postgres + Storage) · Google Gemini (`@google/genai`,
-salida estructurada con JSON Schema) · lucide-react · Vitest.
+salida estructurada con JSON Schema) · Resend (correo transaccional) ·
+lucide-react · Vitest.
 
 ## Arquitectura (mínima a propósito)
 
@@ -90,13 +116,19 @@ Landing (/)                          Asistente (/asistente)
             └─ Supabase (service role)           → proveedor Gemini (src/providers/gemini.ts)
                  ├─ tabla cake_requests                 ├─ prompt del sistema
                  └─ bucket cake-references              └─ base de conocimiento
+            └─ after(() => processLead())  ← src/leads/service.ts (Reto 4)
+                 ├─ tabla leads
+                 ├─ tabla lead_automation_events
+                 └─ correos (src/email/) vía Resend
 ```
 
 El asistente incluye rate limiting (10 req/min/IP), validación estricta de
 la salida del modelo con fallback seguro e historial acotado a 6 turnos.
 En producción, si falta `GEMINI_API_KEY` la app **falla explícitamente**
-(sin degradar en silencio). Las decisiones importantes de ambos retos y sus
-motivos están en [`docs/decisions.md`](docs/decisions.md).
+(sin degradar en silencio); la automatización de leads sigue el mismo
+criterio para el correo (ver `docs/challenge-4.md`). Las decisiones
+importantes de los cuatro retos y sus motivos están en
+[`docs/decisions.md`](docs/decisions.md).
 
 ## Correr en local
 
@@ -119,11 +151,17 @@ cada una):
   Supabase arriba).
 - `NEXT_PUBLIC_WHATSAPP_URL` — opcional; sin ella, el footer no muestra el
   enlace de WhatsApp (no hay número de negocio confirmado todavía).
+- `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `KAREM_NOTIFICATION_EMAIL` —
+  necesarias para que la automatización de leads (Reto 4) envíe correos
+  reales. Sin ellas, en desarrollo/test se usa un stub que solo loguea en
+  consola (no envía nada); en producción, cada paso de correo sin
+  configurar queda registrado como error explícito, nunca como éxito
+  simulado. Detalle en [`docs/challenge-4.md`](docs/challenge-4.md).
 
 Pruebas y lint:
 
 ```bash
-npm test      # 70 pruebas (no consumen cuota de Gemini ni tocan Supabase)
+npm test      # 135 pruebas (no consumen cuota de Gemini ni tocan Supabase/Resend)
 npm run lint
 npm run build
 ```
@@ -134,5 +172,6 @@ npm run build
 - [`docs/challenge-1.md`](docs/challenge-1.md) — requisitos y criterios del Reto 1
 - [`docs/challenge-2.md`](docs/challenge-2.md) — requisitos y criterios del Reto 2
 - [`docs/challenge-3.md`](docs/challenge-3.md) — requisitos y criterios del Reto 3
+- [`docs/challenge-4.md`](docs/challenge-4.md) — requisitos y criterios del Reto 4
 - [`docs/decisions.md`](docs/decisions.md) — registro de decisiones con motivos
 - [`CLAUDE.md`](CLAUDE.md) — reglas para agentes de IA que trabajen en el repo
