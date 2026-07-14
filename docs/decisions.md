@@ -359,4 +359,12 @@ incluyendo la combinación exacta reportada.
   `.env.local` y Vercel). `processLead`, las plantillas, la idempotencia,
   la clasificación y las Server Actions no cambiaron; el `messageId` de
   Nodemailer ocupa el lugar del id de Resend como `providerId`. Detalle y
-  limitaciones de Gmail SMTP en `docs/challenge-4.md`.
+  limitaciones de Gmail SMTP en `docs/challenge-4.md`. Verificado de
+  extremo a extremo en local con envío real: ambos flujos (Reto 2 y
+  Reto 3) probados por el dueño del proyecto con ambos correos recibidos,
+  más una pasada automatizada (Playwright) confirmando en
+  `lead_automation_events` los tres eventos en `success` con `providerId`
+  de Gmail, cero fugas de la contraseña en logs, y el camino de
+  producción mal configurada registrando `error` explícito sin perder el
+  lead. Pendiente solo la verificación en Vercel Preview cuando las
+  variables estén configuradas allí.
