@@ -4,13 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import CakeStage from "./CakeStage";
 import DesignRequestForm from "./DesignRequestForm";
 import Button from "@/components/ui/Button";
-import {
-  TIER_OPTIONS,
-  getBaseOption,
-  getPlaqueOption,
-  getStandOption,
-  getTopperOption,
-} from "@/lib/cake-builder/options";
+import { describeCakeDesign } from "@/lib/cake-builder/design-summary";
 import type { CakeDesign } from "@/lib/cake-builder/types";
 
 const CONFETTI_COLORS = ["bg-terracotta", "bg-gold", "bg-blush", "bg-yellow"];
@@ -49,21 +43,7 @@ export default function FinalView({ design, onEdit, onRestart }: FinalViewProps)
     headingRef.current?.focus();
   }, []);
 
-  const tierLabel = TIER_OPTIONS.find((t) => t.tiers === design.tiers)?.label;
-  const base = getBaseOption(design.tiers, design.baseVariant);
-  const stand = getStandOption(design.standVariant);
-  const plaque = getPlaqueOption(design.plaqueVariant);
-  const topper = getTopperOption(design.topperVariant);
-
-  const summary = [
-    tierLabel && `Torta de ${tierLabel.toLowerCase()}`,
-    base && `Color ${base.label.toLowerCase()}`,
-    stand && `Pedestal ${stand.label.toLowerCase()}`,
-    plaque
-      ? `Placa ${plaque.label.toLowerCase()}${design.message ? ` con "${design.message}"` : ""}`
-      : "Sin placa",
-    topper ? `Topper: ${topper.label}` : "Sin topper",
-  ].filter((line): line is string => Boolean(line));
+  const summary = describeCakeDesign(design);
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-6 px-4 py-10 text-center sm:py-14">
