@@ -41,7 +41,7 @@ export default function OrderFilters({ orders, active, onChange }: OrderFiltersP
             type="button"
             aria-pressed={isActive}
             onClick={() => onChange(option.value)}
-            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-terracotta-dark ${
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-terracotta-dark focus-visible:ring-offset-2 focus-visible:ring-offset-cream ${
               isActive
                 ? "border-terracotta-dark bg-terracotta-dark font-medium text-cream-light"
                 : "border-border-soft bg-cream-light text-cocoa hover:border-terracotta/50"

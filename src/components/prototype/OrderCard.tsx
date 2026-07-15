@@ -1,24 +1,13 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { Check, Sparkles } from "lucide-react";
 import { CakeIcon, ClockIcon, DeliveryIcon, PeopleIcon } from "@/components/ui/icons";
 import { formatDateEs } from "@/email/format-date";
 import { daysBetweenISO } from "@/lib/prototype/dates";
 import { orderAttention } from "@/lib/prototype/reducer";
-import type { OrderAttention, PrototypeOrder } from "@/types/prototype";
-import StatusBadge from "./StatusBadge";
-
-const ATTENTION_LABEL: Record<OrderAttention, string> = {
-  urgent: "Atender hoy",
-  high: "Atender pronto",
-  normal: "Con margen",
-};
-
-const ATTENTION_CLASSES: Record<OrderAttention, string> = {
-  urgent: "font-semibold text-terracotta-dark",
-  high: "font-medium text-cocoa",
-  normal: "text-text-secondary",
-};
+import type { PrototypeOrder } from "@/types/prototype";
+import PrototypeButton from "./PrototypeButton";
+import StatusBadge, { AttentionTag } from "./StatusBadge";
 
 interface OrderCardProps {
   order: PrototypeOrder;
@@ -31,8 +20,10 @@ export default function OrderCard({ order, baseDate, onView }: OrderCardProps) {
   const daysUntil = daysBetweenISO(baseDate, order.celebrationDate);
   const attention = orderAttention(baseDate, order.celebrationDate);
   // El recorrido sugerido solo se destaca mientras el pedido sigue nuevo:
-  // tras cotizarlo (o al filtrar) vuelve a ser una tarjeta más.
+  // tras cotizarlo vuelve a ser una tarjeta más, con una marca discreta de
+  // que fue el pedido procesado en la demo (derivada, sin estado extra).
   const isSuggested = order.isDemoFlowOrder && order.status === "new";
+  const wasProcessedInDemo = order.isDemoFlowOrder && order.status === "waiting_deposit";
 
   return (
     <article
@@ -44,6 +35,12 @@ export default function OrderCard({ order, baseDate, onView }: OrderCardProps) {
         <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.15em] text-gold">
           <Sparkles aria-hidden className="size-3.5" />
           Recorrido sugerido
+        </p>
+      )}
+      {wasProcessedInDemo && (
+        <p className="flex items-center gap-1.5 text-xs text-text-secondary">
+          <Check aria-hidden className="size-3.5 text-terracotta" />
+          Cotizada en esta demostración
         </p>
       )}
 
@@ -84,16 +81,10 @@ export default function OrderCard({ order, baseDate, onView }: OrderCardProps) {
       </p>
 
       <div className="mt-auto flex items-center justify-between gap-3 pt-1">
-        <span className={`text-xs ${ATTENTION_CLASSES[attention]}`}>
-          {ATTENTION_LABEL[attention]}
-        </span>
-        <button
-          type="button"
-          onClick={() => onView(order.id)}
-          className="rounded-full border border-terracotta px-4 py-1.5 text-sm font-medium text-terracotta-dark transition-colors hover:bg-terracotta/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-terracotta-dark"
-        >
+        <AttentionTag attention={attention} />
+        <PrototypeButton variant="outline" size="sm" onClick={() => onView(order.id)}>
           Ver pedido
-        </button>
+        </PrototypeButton>
       </div>
     </article>
   );

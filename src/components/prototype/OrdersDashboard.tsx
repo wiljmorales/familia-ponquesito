@@ -3,8 +3,10 @@
 import { CakeIcon } from "@/components/ui/icons";
 import { dashboardIndicators, filterOrders } from "@/lib/prototype/reducer";
 import type { PrototypeOrder, StatusFilter } from "@/types/prototype";
+import FocusHeading from "./FocusHeading";
 import OrderCard from "./OrderCard";
 import OrderFilters from "./OrderFilters";
+import PrototypeButton from "./PrototypeButton";
 import { STATUS_FILTER_LABEL } from "./StatusBadge";
 
 interface OrdersDashboardProps {
@@ -36,7 +38,9 @@ export default function OrdersDashboard({
   return (
     <section className="flex flex-col gap-6">
       <div>
-        <h1 className="font-serif text-2xl text-cocoa sm:text-3xl">Centro de pedidos</h1>
+        <FocusHeading className="font-serif text-2xl text-cocoa sm:text-3xl">
+          Centro de pedidos
+        </FocusHeading>
         <p className="mt-1 text-sm text-text-secondary sm:text-base">
           Las solicitudes de tortas de todos los canales, organizadas en un solo lugar.
         </p>
@@ -64,13 +68,9 @@ export default function OrdersDashboard({
               ? "No hay pedidos en la demostración."
               : `Ahora mismo no hay pedidos en «${STATUS_FILTER_LABEL[statusFilter]}».`}
           </p>
-          <button
-            type="button"
-            onClick={() => onFilterChange("all")}
-            className="rounded-full border border-terracotta px-4 py-1.5 text-sm font-medium text-terracotta-dark transition-colors hover:bg-terracotta/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-terracotta-dark"
-          >
+          <PrototypeButton variant="outline" size="sm" onClick={() => onFilterChange("all")}>
             Ver todos los pedidos
-          </button>
+          </PrototypeButton>
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

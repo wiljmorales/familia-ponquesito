@@ -93,9 +93,11 @@ export function prototypeReducer(
     case "set_filter":
       return { ...state, statusFilter: action.filter };
 
-    case "start_quote":
-      if (!selectedOrder(state)) return state;
+    case "start_quote": {
+      const order = selectedOrder(state);
+      if (!order || !canPrepareQuote(order.status)) return state;
       return { ...state, screen: "quote-form" };
+    }
 
     case "cancel_quote":
       return { ...state, screen: "request-detail" };
@@ -143,6 +145,17 @@ export function prototypeReducer(
     case "reset":
       return createInitialState(state.baseDate);
   }
+}
+
+/**
+ * Estados desde los que tiene sentido preparar una cotización: una vez
+ * enviada (waiting_deposit) o confirmado el pedido, la acción desaparece.
+ * La UI y el reducer usan esta misma regla (doble barrera).
+ */
+const QUOTABLE_STATUSES: readonly OrderStatus[] = ["new", "reviewing", "to_quote"];
+
+export function canPrepareQuote(status: OrderStatus): boolean {
+  return QUOTABLE_STATUSES.includes(status);
 }
 
 /**

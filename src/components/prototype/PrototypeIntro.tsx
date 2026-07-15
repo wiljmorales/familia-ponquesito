@@ -1,8 +1,8 @@
 "use client";
 
-import Button from "@/components/ui/Button";
 import { ChatIcon, ClipboardIcon, HeartIcon, type IconProps } from "@/components/ui/icons";
 import type { ComponentType } from "react";
+import PrototypeButton from "./PrototypeButton";
 
 /** El flujo que la herramienta propone ordenar. */
 const FLOW_STEPS = ["Solicitud", "Cotización", "Anticipo", "Pedido confirmado"] as const;
@@ -93,9 +93,9 @@ export default function PrototypeIntro({ onExplore }: { onExplore: () => void })
       </div>
 
       <div className="flex flex-col items-center gap-3">
-        <Button onClick={onExplore} withHeart>
+        <PrototypeButton onClick={onExplore} withHeart>
           Explorar el prototipo
-        </Button>
+        </PrototypeButton>
         <p className="text-xs text-text-secondary">
           Recorre el flujo completo: de una solicitud nueva a un pedido esperando anticipo.
         </p>

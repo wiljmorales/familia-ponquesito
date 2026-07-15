@@ -1,4 +1,4 @@
-import type { OrderStatus } from "@/types/prototype";
+import type { OrderAttention, OrderStatus } from "@/types/prototype";
 
 /** Labels en singular (badge del pedido, línea de progreso). */
 export const STATUS_LABEL: Record<OrderStatus, string> = {
@@ -38,6 +38,27 @@ export default function StatusBadge({ status }: { status: OrderStatus }) {
     >
       <span aria-hidden className="size-1.5 rounded-full bg-current" />
       {STATUS_LABEL[status]}
+    </span>
+  );
+}
+
+const ATTENTION_LABEL: Record<OrderAttention, string> = {
+  urgent: "Atender hoy",
+  high: "Atender pronto",
+  normal: "Con margen",
+};
+
+const ATTENTION_CLASSES: Record<OrderAttention, string> = {
+  urgent: "font-semibold text-terracotta-dark",
+  high: "font-medium text-cocoa",
+  normal: "text-text-secondary",
+};
+
+/** Nivel de atención derivado de las fechas (ver orderAttention). */
+export function AttentionTag({ attention }: { attention: OrderAttention }) {
+  return (
+    <span className={`whitespace-nowrap text-xs ${ATTENTION_CLASSES[attention]}`}>
+      {ATTENTION_LABEL[attention]}
     </span>
   );
 }

@@ -91,6 +91,13 @@ describe("navegación entre pantallas", () => {
     expect(prototypeReducer(before, { type: "start_quote" })).toBe(before);
   });
 
+  it("no abre el formulario para pedidos ya cotizados o confirmados", () => {
+    // PED-004 está esperando anticipo: cotizar de nuevo no tiene sentido.
+    let state = prototypeReducer(createInitialState(BASE_DATE), { type: "enter_dashboard" });
+    state = prototypeReducer(state, { type: "view_order", orderId: "PED-004" });
+    expect(prototypeReducer(state, { type: "start_quote" })).toBe(state);
+  });
+
   it("cancelar la cotización vuelve al detalle", () => {
     const state = prototypeReducer(stateAtQuoteForm(), { type: "cancel_quote" });
     expect(state.screen).toBe("request-detail");
