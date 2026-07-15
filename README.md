@@ -12,6 +12,7 @@ Challenge**. El repositorio evoluciona reto a reto (ver
 | `/` | Landing de producto: propuesta de valor, galería, sabores, condiciones y formulario de solicitud de cotización (persistido en Supabase). | Reto 2 |
 | `/crea-tu-torta` | Juego "Crea tu propia torta": decora una torta paso a paso y deja tus datos para recibir una cotización personalizada inspirada en tu diseño (persistido en Supabase). | Reto 3 |
 | `/asistente` | Chat del asistente virtual que responde con la base de conocimiento real del negocio y admite lo que no sabe. | Reto 1 |
+| `/prototipo` | Prototipo navegable del "Centro de pedidos": una propuesta (con datos de demostración, sin backend) para que Karem centralice solicitudes, cotizaciones y anticipos. | Reto 5 |
 
 Los leads de `/` y `/crea-tu-torta` se procesan automáticamente (Reto 4):
 registro y clasificación, correo de confirmación al cliente, correo interno
@@ -176,5 +177,6 @@ npm run build
 - [`docs/challenge-2.md`](docs/challenge-2.md) — requisitos y criterios del Reto 2
 - [`docs/challenge-3.md`](docs/challenge-3.md) — requisitos y criterios del Reto 3
 - [`docs/challenge-4.md`](docs/challenge-4.md) — requisitos y criterios del Reto 4
+- [`docs/challenge-5.md`](docs/challenge-5.md) — requisitos y criterios del Reto 5
 - [`docs/decisions.md`](docs/decisions.md) — registro de decisiones con motivos
 - [`CLAUDE.md`](CLAUDE.md) — reglas para agentes de IA que trabajen en el repo
