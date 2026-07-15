@@ -186,6 +186,29 @@ describe("send_quote: la interacción central del reto", () => {
   });
 });
 
+describe("apply_overrides: rehidratación desde sessionStorage", () => {
+  it("aplica estados guardados sin cambiar de pantalla", () => {
+    const before = createInitialState(BASE_DATE);
+    const after = prototypeReducer(before, {
+      type: "apply_overrides",
+      overrides: { [DEMO_ORDER_ID]: "waiting_deposit" },
+    });
+    expect(after.screen).toBe("intro");
+    expect(after.orders.find((order) => order.id === DEMO_ORDER_ID)?.status).toBe(
+      "waiting_deposit",
+    );
+  });
+
+  it("ignora ids desconocidos y estados sin cambio (misma referencia)", () => {
+    const before = createInitialState(BASE_DATE);
+    const after = prototypeReducer(before, {
+      type: "apply_overrides",
+      overrides: { "PED-999": "confirmed", [DEMO_ORDER_ID]: "new" },
+    });
+    expect(after).toBe(before);
+  });
+});
+
 describe("reset: reiniciar la demo", () => {
   it("restaura los pedidos originales y vuelve a la portada", () => {
     let state = prototypeReducer(stateAtQuoteForm(), {

@@ -39,6 +39,7 @@ export type PrototypeAction =
   | { type: "start_quote" }
   | { type: "cancel_quote" }
   | { type: "send_quote"; input: QuoteInput }
+  | { type: "apply_overrides"; overrides: Record<string, OrderStatus> }
   | { type: "reset" };
 
 /**
@@ -123,6 +124,20 @@ export function prototypeReducer(
           item.id === order.id ? { ...item, status: "waiting_deposit" } : item,
         ),
       };
+    }
+
+    // Re-aplica los cambios guardados en sessionStorage. Se despacha desde
+    // un efecto tras el montaje (nunca en el primer render) para que el
+    // HTML del servidor y la hidratación del cliente coincidan siempre.
+    case "apply_overrides": {
+      let changed = false;
+      const orders = state.orders.map((order) => {
+        const override = action.overrides[order.id];
+        if (!override || override === order.status) return order;
+        changed = true;
+        return { ...order, status: override };
+      });
+      return changed ? { ...state, orders } : state;
     }
 
     case "reset":
