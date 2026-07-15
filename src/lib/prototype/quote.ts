@@ -105,6 +105,75 @@ export function isQuoteValid(input: QuoteInput, context: QuoteContext): boolean 
   return Object.keys(validateQuote(input, context)).length === 0;
 }
 
+/** Lo que la UI del formulario maneja: strings crudos de los inputs. */
+export interface QuoteFormValues {
+  basePrice: string;
+  decorationPrice: string;
+  deliveryEnabled: boolean;
+  deliveryPrice: string;
+  discount: string;
+  confirmDeadline: string;
+  personalNote: string;
+}
+
+/**
+ * "" en un campo opcional vale 0; en el precio base queda NaN para que la
+ * validación lo exija. Acepta coma decimal (usual en es-VE); cualquier
+ * texto no numérico termina en NaN y lo atrapa validateQuote.
+ */
+function parseMoney(raw: string, { required = false } = {}): number {
+  const normalized = raw.trim().replace(",", ".");
+  if (normalized === "") return required ? Number.NaN : 0;
+  return Number(normalized);
+}
+
+export function quoteInputFromForm(values: QuoteFormValues): QuoteInput {
+  return {
+    basePrice: parseMoney(values.basePrice, { required: true }),
+    decorationPrice: parseMoney(values.decorationPrice),
+    deliveryEnabled: values.deliveryEnabled,
+    deliveryPrice: parseMoney(values.deliveryPrice),
+    discount: parseMoney(values.discount),
+    confirmDeadline: values.confirmDeadline,
+    personalNote: values.personalNote,
+  };
+}
+
+/**
+ * Valores con los que se abre el formulario: montos vacíos (no hay precios
+ * reales que proponer), delivery según lo pidió el cliente y fecha límite
+ * propuesta por la regla existente. Cancelar descarta estos valores: la
+ * próxima vez el formulario arranca de cero (decisión documentada en
+ * docs/challenge-5.md).
+ */
+export function defaultQuoteFormValues(
+  order: PrototypeOrder,
+  baseDate: string,
+): QuoteFormValues {
+  return {
+    basePrice: "",
+    decorationPrice: "",
+    deliveryEnabled: order.deliveryMethod === "delivery",
+    deliveryPrice: "",
+    discount: "",
+    confirmDeadline: defaultConfirmDeadline(baseDate, order.celebrationDate),
+    personalNote: "",
+  };
+}
+
+/**
+ * La vista previa del mensaje necesita montos numéricos y una fecha con
+ * forma válida (formatDateEs lanzaría con una fecha malformada). No exige
+ * que la cotización sea válida: se actualiza mientras se edita.
+ */
+export function isPreviewableQuote(input: QuoteInput): boolean {
+  return (
+    [input.basePrice, input.decorationPrice, input.discount].every(Number.isFinite) &&
+    (!input.deliveryEnabled || Number.isFinite(input.deliveryPrice)) &&
+    ISO_DATE_PATTERN.test(input.confirmDeadline)
+  );
+}
+
 /** "US$ 120" para enteros, "US$ 120,50" con decimales (coma, como en es-VE). */
 export function formatMoney(value: number): string {
   const rounded = round2(value);

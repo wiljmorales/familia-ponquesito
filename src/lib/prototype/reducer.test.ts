@@ -8,6 +8,7 @@ import {
   filterOrders,
   orderAttention,
   prototypeReducer,
+  recoverScreen,
   selectedOrder,
   type PrototypeState,
 } from "./reducer";
@@ -221,6 +222,47 @@ describe("reset: reiniciar la demo", () => {
     expect(state.selectedOrderId).toBeNull();
     expect(state.sentQuote).toBeNull();
     expect(state.orders).toEqual(createPrototypeOrders(BASE_DATE));
+  });
+});
+
+describe("recoverScreen: recuperación ante estados inconsistentes", () => {
+  it("deja pasar los estados normales tal cual", () => {
+    expect(recoverScreen(createInitialState(BASE_DATE))).toBe("intro");
+    expect(recoverScreen(stateAtDetail())).toBe("request-detail");
+    expect(recoverScreen(stateAtQuoteForm())).toBe("quote-form");
+    const sent = prototypeReducer(stateAtQuoteForm(), {
+      type: "send_quote",
+      input: VALID_QUOTE,
+    });
+    expect(recoverScreen(sent)).toBe("quote-sent");
+  });
+
+  it("una pantalla que exige pedido sin selección se recupera al dashboard", () => {
+    for (const screen of ["request-detail", "quote-form", "quote-sent"] as const) {
+      const broken: PrototypeState = {
+        ...createInitialState(BASE_DATE),
+        screen,
+        selectedOrderId: null,
+      };
+      expect(recoverScreen(broken)).toBe("dashboard");
+    }
+  });
+
+  it("un pedido seleccionado inexistente se recupera al dashboard", () => {
+    const broken: PrototypeState = {
+      ...stateAtDetail(),
+      selectedOrderId: "PED-999",
+    };
+    expect(recoverScreen(broken)).toBe("dashboard");
+  });
+
+  it("una confirmación sin cotización enviada se recupera al dashboard", () => {
+    const broken: PrototypeState = {
+      ...stateAtDetail(),
+      screen: "quote-sent",
+      sentQuote: null,
+    };
+    expect(recoverScreen(broken)).toBe("dashboard");
   });
 });
 

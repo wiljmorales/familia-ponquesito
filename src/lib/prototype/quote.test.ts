@@ -6,10 +6,14 @@ import {
   buildCustomerMessage,
   computeQuoteTotals,
   defaultConfirmDeadline,
+  defaultQuoteFormValues,
   formatMoney,
+  isPreviewableQuote,
   isQuoteValid,
   latestConfirmDeadline,
+  quoteInputFromForm,
   validateQuote,
+  type QuoteFormValues,
 } from "./quote";
 
 const BASE_DATE = "2026-03-10";
@@ -142,6 +146,81 @@ describe("defaultConfirmDeadline", () => {
   it("nunca propone una fecha anterior a la base", () => {
     // Celebración exactamente en el mínimo (base + 3): confirmar hoy.
     expect(defaultConfirmDeadline(BASE_DATE, "2026-03-13")).toBe(BASE_DATE);
+  });
+});
+
+function formValues(overrides: Partial<QuoteFormValues> = {}): QuoteFormValues {
+  return {
+    basePrice: "80",
+    decorationPrice: "25",
+    deliveryEnabled: true,
+    deliveryPrice: "5",
+    discount: "",
+    confirmDeadline: "2026-03-12",
+    personalNote: "",
+    ...overrides,
+  };
+}
+
+describe("quoteInputFromForm", () => {
+  it("convierte strings a números y los opcionales vacíos valen 0", () => {
+    const input = quoteInputFromForm(formValues());
+    expect(input.basePrice).toBe(80);
+    expect(input.decorationPrice).toBe(25);
+    expect(input.deliveryPrice).toBe(5);
+    expect(input.discount).toBe(0);
+  });
+
+  it("el precio base vacío queda NaN para que la validación lo exija", () => {
+    const input = quoteInputFromForm(formValues({ basePrice: "  " }));
+    expect(Number.isNaN(input.basePrice)).toBe(true);
+    expect(validateQuote(input, CONTEXT)).toHaveProperty("basePrice");
+  });
+
+  it("acepta coma decimal y rechaza texto no numérico vía validación", () => {
+    expect(quoteInputFromForm(formValues({ basePrice: "80,50" })).basePrice).toBe(80.5);
+    const garbage = quoteInputFromForm(formValues({ basePrice: "abc" }));
+    expect(Number.isNaN(garbage.basePrice)).toBe(true);
+  });
+});
+
+describe("defaultQuoteFormValues", () => {
+  it("propone montos vacíos, delivery según el pedido y la fecha límite de la regla", () => {
+    const values = defaultQuoteFormValues(ORDER, BASE_DATE);
+    expect(values.basePrice).toBe("");
+    expect(values.deliveryEnabled).toBe(true); // PED-001 pidió delivery
+    expect(values.confirmDeadline).toBe(defaultConfirmDeadline(BASE_DATE, ORDER.celebrationDate));
+  });
+
+  it("desactiva el delivery cuando el pedido es retiro", () => {
+    const retiro = createPrototypeOrders(BASE_DATE)[1]; // PED-002, retiro
+    expect(defaultQuoteFormValues(retiro, BASE_DATE).deliveryEnabled).toBe(false);
+  });
+});
+
+describe("isPreviewableQuote", () => {
+  it("permite la vista previa con montos numéricos y fecha bien formada", () => {
+    expect(isPreviewableQuote(quoteInputFromForm(formValues()))).toBe(true);
+  });
+
+  it("bloquea la vista previa con base vacía o fecha malformada", () => {
+    expect(isPreviewableQuote(quoteInputFromForm(formValues({ basePrice: "" })))).toBe(false);
+    expect(
+      isPreviewableQuote(quoteInputFromForm(formValues({ confirmDeadline: "" }))),
+    ).toBe(false);
+  });
+
+  it("no exige validez completa: una fecha vencida sigue siendo previsualizable", () => {
+    const input = quoteInputFromForm(formValues({ confirmDeadline: "2020-01-01" }));
+    expect(isPreviewableQuote(input)).toBe(true);
+    expect(isQuoteValid(input, CONTEXT)).toBe(false);
+  });
+
+  it("ignora un delivery no numérico si está desactivado", () => {
+    const input = quoteInputFromForm(
+      formValues({ deliveryEnabled: false, deliveryPrice: "abc" }),
+    );
+    expect(isPreviewableQuote(input)).toBe(true);
   });
 });
 

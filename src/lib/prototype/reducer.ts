@@ -145,6 +145,23 @@ export function prototypeReducer(
   }
 }
 
+/**
+ * Pantalla segura para renderizar. Ninguna combinación normal de acciones
+ * produce estados inconsistentes (el reducer los previene), pero si algo
+ * quedara raro (p. ej. una pantalla que exige pedido sin selección, o una
+ * confirmación sin cotización enviada) la app se recupera al dashboard en
+ * vez de quedar en blanco.
+ */
+export function recoverScreen(state: PrototypeState): PrototypeScreen {
+  const needsOrder =
+    state.screen === "request-detail" ||
+    state.screen === "quote-form" ||
+    state.screen === "quote-sent";
+  if (needsOrder && !selectedOrder(state)) return "dashboard";
+  if (state.screen === "quote-sent" && !state.sentQuote) return "dashboard";
+  return state.screen;
+}
+
 export function filterOrders(
   orders: PrototypeOrder[],
   filter: StatusFilter,
