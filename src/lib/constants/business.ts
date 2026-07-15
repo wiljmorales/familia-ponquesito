@@ -48,6 +48,15 @@ export const CELEBRATION_TYPES = [
   { value: "otro", label: "Otro" },
 ] as const;
 
+/** Métodos de pago confirmados (ver src/knowledge/familia-ponquesito.md). */
+export const PAYMENT_METHODS = [
+  "Pago Móvil",
+  "Transferencia bancaria",
+  "Efectivo",
+  "Binance",
+  "Mercantil Panamá",
+] as const;
+
 export const CONDITIONS = [
   { label: "Pedidos con mínimo 3 días de anticipación" },
   { label: "No se aceptan pedidos para el mismo día" },
