@@ -144,11 +144,23 @@ completo: es una historia de producto navegable.
 
 ## Cómo ejecutar la demo
 
-_Pendiente: se completará cuando las pantallas estén construidas._
+```bash
+npm run dev
+# abrir http://localhost:3000/prototipo
+```
+
+La ruta es pública y se entiende sin explicación oral: la portada presenta
+el problema, la audiencia y el CTA "Explorar el prototipo". `/prototipo` se
+renderiza por request (`connection()`) para que la fecha base sea siempre
+la del día; el resto del sitio sigue estático. La página lleva
+`robots: noindex` (decisión de prototipo: es una herramienta interna que se
+comparte por enlace directo).
 
 ## Cómo reiniciar el prototipo
 
-_Pendiente: se completará cuando las pantallas estén construidas._
+Botón "Reiniciar demo" en el encabezado (visible en todas las pantallas
+menos la portada). Pide confirmación, borra la clave de `sessionStorage` y
+restaura pedidos, contadores y filtros iniciales.
 
 ## Verificación manual del recorrido (pendiente de ejecutar)
 
@@ -167,6 +179,22 @@ no se marcará como realizada antes de tiempo.
 
 ## Verificaciones realizadas
 
-_Pendiente: se registrarán aquí los resultados reales de `npm test`,
-`npm run lint`, `npx tsc --noEmit`, `npm run build` y la verificación
-manual._
+### Etapa 2 (portada + centro de pedidos) — 2026-07-14
+
+- `npm test`: 204 pruebas pasan (25 archivos, 65 del Reto 5).
+- `npm run lint` y `npx tsc --noEmit`: sin errores.
+- `npm run build`: `/prototipo` sale como única ruta dinámica (ƒ); todas
+  las rutas anteriores siguen estáticas (○).
+- Verificación manual con Playwright (build de producción, siguiendo el
+  skill `verify` del repo) en 1440 px y 390 px: portada comprensible
+  (Karem, problema, flujo, aviso de demo), explorar → dashboard,
+  indicadores y 5 tarjetas, filtros con `aria-pressed` y estado vacío
+  útil, "Ver pedido" → vista temporal del detalle → volver, overrides
+  válidos en `sessionStorage` sobreviven la recarga, JSON corrupto no
+  rompe la UI, "Reiniciar demo" limpia la clave y restaura los datos,
+  regreso al sitio principal, sin desbordamiento horizontal en ninguno de
+  los dos anchos, foco visible con navegación por teclado (Tab/Enter) y
+  chip activo de filtros con contraste ~5.5:1 (terracota oscura).
+
+El flujo total del reto (detalle → cotización → confirmación → regreso)
+sigue **pendiente**: se verificará al cerrar la Etapa 3.
