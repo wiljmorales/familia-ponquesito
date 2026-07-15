@@ -20,9 +20,12 @@ export default function OrderProgress({ status }: { status: OrderStatus }) {
 
   return (
     // En móvil la línea se desplaza en horizontal de forma controlada.
+    // `relative` es imprescindible: los sr-only (position:absolute) de los
+    // pasos deben quedar contenidos en este scroll; si no, se posicionan
+    // respecto al documento y ensanchan la página en móvil.
     <ol
       aria-label="Progreso del pedido"
-      className="-mx-1 flex items-center overflow-x-auto px-1 py-1"
+      className="relative -mx-1 flex items-center overflow-x-auto px-1 py-1"
     >
       {steps.map((step, index) => (
         <li
