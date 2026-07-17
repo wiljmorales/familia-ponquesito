@@ -404,5 +404,20 @@ incluyendo la combinación exacta reportada.
 - **Destinatario: `KAREM_NOTIFICATION_EMAIL`** (variable existente del
   Reto 4), guardado enmascarado (`k•••@…`) en la base. Alertas por reglas
   fijas, nunca por IA. Una semana sin registros produce y envía un reporte
-  válido. Detalle completo en `docs/challenge-6.md`. Pendientes: route
-  handler + `vercel.json`, página `/reporte-semanal` y verificación real.
+  válido. Detalle completo en `docs/challenge-6.md`.
+- **Etapas 5–6 (mismo día)**: endpoint `GET /api/reports/weekly`
+  (`runtime nodejs`, `maxDuration 60`, `Cache-Control: no-store`) que solo
+  acepta el secreto por header `Authorization: Bearer` (nunca query
+  param); sin `CRON_SECRET` responde 503 sin ejecutar nada. Respuestas
+  mínimas (`ok`, `status`, periodo, `reportId`): nunca destinatario,
+  métricas, resumen ni errores internos. `?trigger=manual` para la
+  verificación protegida, con el mismo secreto. Página pública
+  `/reporte-semanal` que consulta EXCLUSIVAMENTE `weekly_reports` sin
+  seleccionar `recipient_masked`, `error_message` ni `id` — el
+  destinatario se describe solo como "correo configurado del negocio" y
+  los estados fallidos usan etiquetas genéricas. **Riesgos aceptados como
+  limitación documentada** (decisión del dueño del proyecto): fila
+  `processing` huérfana ante una interrupción abrupta (el desbloqueo es
+  una corrida manual, siempre permitida), sin paginación sobre el límite
+  de 1000 filas de Supabase, y ventana de ±1 hora del cron en Vercel
+  Hobby sin reintentos automáticos.

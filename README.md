@@ -13,6 +13,7 @@ Challenge**. El repositorio evoluciona reto a reto (ver
 | `/crea-tu-torta` | Juego "Crea tu propia torta": decora una torta paso a paso y deja tus datos para recibir una cotización personalizada inspirada en tu diseño (persistido en Supabase). | Reto 3 |
 | `/asistente` | Chat del asistente virtual que responde con la base de conocimiento real del negocio y admite lo que no sabe. | Reto 1 |
 | `/prototipo` | Prototipo navegable del "Centro de pedidos": una propuesta (con datos de demostración, sin backend) para que Karem centralice solicitudes, cotizaciones y anticipos. | Reto 5 |
+| `/reporte-semanal` | "Pulso Ponquesito": el reporte semanal que se arma y se envía solo (Vercel Cron → Supabase → métricas → resumen con Gemini o fallback → correo → registro). Muestra solo datos agregados y anonimizados. | Reto 6 |
 
 Los leads de `/` y `/crea-tu-torta` se procesan automáticamente (Reto 4):
 registro y clasificación, correo de confirmación al cliente, correo interno
@@ -160,7 +161,12 @@ cada una):
   se usa un stub que solo loguea en consola (no envía nada); en
   producción, cada paso de correo sin configurar queda registrado como
   error explícito, nunca como éxito simulado. Detalle en
-  [`docs/challenge-4.md`](docs/challenge-4.md).
+  [`docs/challenge-4.md`](docs/challenge-4.md). El reporte semanal
+  (Reto 6) reutiliza este mismo SMTP y destinatario.
+- `CRON_SECRET` — protege `GET /api/reports/weekly` (el cron del reporte
+  semanal, Reto 6). Vercel Cron la envía como `Authorization: Bearer`;
+  sin ella el endpoint responde 503 y no ejecuta nada. Detalle en
+  [`docs/challenge-6.md`](docs/challenge-6.md).
 
 Pruebas y lint:
 
@@ -178,5 +184,6 @@ npm run build
 - [`docs/challenge-3.md`](docs/challenge-3.md) — requisitos y criterios del Reto 3
 - [`docs/challenge-4.md`](docs/challenge-4.md) — requisitos y criterios del Reto 4
 - [`docs/challenge-5.md`](docs/challenge-5.md) — requisitos y criterios del Reto 5
+- [`docs/challenge-6.md`](docs/challenge-6.md) — requisitos y criterios del Reto 6
 - [`docs/decisions.md`](docs/decisions.md) — registro de decisiones con motivos
 - [`CLAUDE.md`](CLAUDE.md) — reglas para agentes de IA que trabajen en el repo
