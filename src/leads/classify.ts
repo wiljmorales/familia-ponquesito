@@ -14,8 +14,12 @@ const BUSINESS_TIMEZONE = "America/Caracas";
 /** Última fecha clasificada como "high" antes de pasar a "normal". */
 const HIGH_PRIORITY_MAX_DAYS = 10;
 
-/** "YYYY-MM-DD" del día calendario actual en la zona horaria del negocio. */
-function businessTodayString(now: Date): string {
+/**
+ * "YYYY-MM-DD" del día calendario actual en la zona horaria del negocio.
+ * Exportada porque el reporte semanal (Reto 6) calcula su periodo sobre el
+ * mismo calendario de Caracas que esta clasificación.
+ */
+export function businessTodayString(now: Date): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: BUSINESS_TIMEZONE,
     year: "numeric",

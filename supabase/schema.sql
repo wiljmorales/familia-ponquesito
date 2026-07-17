@@ -214,3 +214,58 @@ create index if not exists lead_automation_events_lead_event_status_idx
 -- públicas. Solo service_role, desde el servicio de automatización que
 -- corre en el servidor tras un envío exitoso a cake_requests/cake_designs.
 alter table public.lead_automation_events enable row level security;
+
+-- Familia Ponquesito — Reto 6: "Pulso Ponquesito" (reporte semanal automático)
+--
+-- Registro de ejecuciones del reporte semanal: una fila por corrida
+-- (programada por Vercel Cron o disparada manualmente con el secreto).
+-- Solo guarda métricas agregadas y el resumen ejecutivo — nunca nombres,
+-- correos, teléfonos ni payloads de clientes. La página pública
+-- /reporte-semanal lee exclusivamente esta tabla, así la anonimización es
+-- estructural (no hay dato personal que filtrar). Ver docs/challenge-6.md.
+
+create table if not exists public.weekly_reports (
+  id uuid primary key default gen_random_uuid(),
+  period_start date not null,
+  period_end date not null,
+  trigger_type text not null check (trigger_type in ('scheduled', 'manual')),
+  status text not null default 'processing' check (
+    status in ('processing', 'sent', 'email_error', 'data_error')
+  ),
+  -- Nulos SOLO mientras status = 'processing' o si la corrida falló antes
+  -- de generarlos (data_error): la fila se inserta primero para reservar el
+  -- periodo (idempotencia del cron) y se completa durante la ejecución.
+  metrics jsonb,
+  summary text,
+  summary_source text check (summary_source in ('gemini', 'fallback')),
+  -- Destinatario ENMASCARADO (ej. "k•••@gmail.com"), apto para mostrarse
+  -- en la página pública. El correo real solo vive en la variable de
+  -- entorno KAREM_NOTIFICATION_EMAIL, jamás en la base de datos.
+  recipient_masked text,
+  error_message text,
+  generated_at timestamptz not null default now(),
+  sent_at timestamptz,
+  constraint weekly_reports_period_check check (period_end >= period_start)
+);
+
+comment on table public.weekly_reports is
+  'Registro de ejecuciones del reporte semanal "Pulso Ponquesito" (Reto 6): métricas agregadas, resumen ejecutivo y resultado del envío. Sin datos personales por diseño.';
+comment on column public.weekly_reports.summary_source is
+  'gemini = resumen redactado por Gemini; fallback = resumen determinístico (Gemini nunca es punto único de fallo).';
+comment on column public.weekly_reports.status is
+  'processing → sent | email_error | data_error. Un fallo de Gemini NO es un estado de error: se usa el fallback y el envío continúa.';
+
+-- Idempotencia del cron: solo puede existir UNA corrida programada por
+-- periodo. El flujo programado inserta la fila 'processing' como reserva;
+-- si otro disparo del mismo periodo ya la insertó, el insert falla con
+-- 23505 y esa corrida se omite sin enviar correo. Las corridas manuales
+-- (trigger_type = 'manual') quedan fuera del índice a propósito: reenviar
+-- a mano un periodo es una acción deliberada y auditada con su propia fila.
+create unique index if not exists weekly_reports_scheduled_period_key
+  on public.weekly_reports (period_start, period_end)
+  where trigger_type = 'scheduled';
+
+-- Mismo criterio de seguridad que el resto: RLS habilitado y SIN políticas
+-- públicas. Solo service_role desde el servidor (cron/route handler y la
+-- página /reporte-semanal, que renderiza en servidor).
+alter table public.weekly_reports enable row level security;
