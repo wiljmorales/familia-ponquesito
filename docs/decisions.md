@@ -368,3 +368,41 @@ incluyendo la combinación exacta reportada.
   producción mal configurada registrando `error` explícito sin perder el
   lead. Pendiente solo la verificación en Vercel Preview cuando las
   variables estén configuradas allí.
+
+## 2026-07-16 — Reto 6: "Pulso Ponquesito", reporte semanal automático (etapas 1–4)
+
+- **Rama**: `reto-6/pulso-ponquesito`, desde `main`.
+- **Orquestador: Vercel Cron** (lunes 12:00 UTC ≈ 8:00 a. m. Caracas), sin
+  n8n/Make. Se asume plan Hobby (disparo con precisión de ±1 hora — el
+  periodo no cambia mientras sea el mismo día calendario en Caracas).
+- **Privacidad desde la consulta**: el reporte solo selecciona columnas no
+  personales de `leads` y `lead_automation_events` (nunca nombre, correo,
+  WhatsApp, payload, `error_message` ni `metadata`); los conteos usan
+  `count` + `head`. Gemini recibe exclusivamente métricas agregadas.
+  Probado con un fake de Supabase que siembra datos personales y proyecta
+  columnas.
+- **Terminología honesta de correo**: SMTP solo permite afirmar "aceptado
+  por el servidor" — el contrato usa `sent`/`sendSuccessRate` (no
+  `delivered`), sin métricas de apertura ni entrega. Tasa `null` cuando no
+  hubo envíos (nunca 0 %/100 % inventado). Correos deduplicados por
+  `lead_id + event_type`: error + reintento exitoso = UN envío exitoso.
+- **Gemini nunca es punto único de fallo**: resumen con salida
+  estructurada validada (mismo patrón del Reto 1) y fallback
+  determinístico ante cualquier fallo; el reporte se envía igual y
+  `summary_source` registra cuál se usó. Un fallo de Gemini NO es un
+  estado de error del reporte.
+- **Tabla `weekly_reports`** = registro de ejecuciones (una fila por
+  corrida). Estados `processing → sent | email_error | data_error`;
+  `metrics`/`summary` nullable a propósito (la fila nace como reserva).
+  Idempotencia del cron con **índice único parcial**: una sola corrida
+  `scheduled` por periodo (el segundo disparo recibe 23505 y se omite sin
+  enviar); las corridas manuales quedan fuera del índice a propósito.
+  RLS sin políticas públicas, igual que el resto.
+- **Celebraciones próximas sobre todos los leads** (celebration_date entre
+  hoy y hoy+7, calendario Caracas), no solo los del periodo: una
+  celebración cercana importa aunque el lead sea antiguo.
+- **Destinatario: `KAREM_NOTIFICATION_EMAIL`** (variable existente del
+  Reto 4), guardado enmascarado (`k•••@…`) en la base. Alertas por reglas
+  fijas, nunca por IA. Una semana sin registros produce y envía un reporte
+  válido. Detalle completo en `docs/challenge-6.md`. Pendientes: route
+  handler + `vercel.json`, página `/reporte-semanal` y verificación real.
