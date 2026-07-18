@@ -114,3 +114,67 @@ de concurrencia hizo competir dos reservas por el último punto: exactamente una
 ganó, la otra recibió `capacity_unavailable` y la capacidad final fue `1/1`,
 sin sobreventa. La Etapa 4 verificó además la proyección transaccional `1/1/0`,
 ACL de RPC, deduplicación terminal y limpieza mediante `ROLLBACK`.
+
+## Escenario oficial de demostración
+
+`supabase/demo-agenda.sql` prepara una fecha situada 45 días después del día
+actual del negocio. La capacidad total es 3 y una reserva semilla confirmada
+consume 2, por lo que una torta sencilla ve exactamente el último espacio. El
+script se detiene si la fecha contiene reservas u overrides ajenos al demo. Su
+bloque de limpieza está comentado para impedir una eliminación accidental y
+solo reconoce las marcas inequívocas del escenario.
+
+Recorrido de demostración:
+
+1. Ejecutar los bloques **Preparación** e **Inspección**. Confirmar `3/2/1`.
+2. Abrir `/agenda` y describir una torta sencilla: un piso, sin decoración
+   personalizada y sin imagen de referencia.
+3. Elegir la fecha indicada por la inspección, completar únicamente datos de
+   prueba identificables y crear la solicitud.
+4. Conservar el código `FP-8-XXXX` y el enlace privado recibido sin capturar ni
+   publicar el token.
+5. Consultar otra vez la fecha: debe mostrar `3/3/0`.
+6. Un segundo intento concurrente o realizado con disponibilidad anterior debe
+   recibir `capacity_unavailable`, sin sobreventa.
+7. Abrir el enlace privado, reprogramar la primera reserva y comprobar que la
+   fecha original vuelve a `3/2/1`.
+8. Cancelar la reserva reprogramada, comprobar el estado `cancelled` y revisar
+   los eventos `created`, `lead_registered`, `email_sent`, `rescheduled` y
+   `cancelled` que correspondan.
+9. Ejecutar exclusivamente el bloque **Limpieza** del script.
+
+Para demostrar `human_review`, se describe un diseño ambiguo o especial. La UI
+debe llamarlo “fecha preferida”, mantener lenguaje de revisión personalizada y
+mostrar en disponibilidad que la solicitud no incrementó `capacity_used`.
+
+## Checklist de entrega y evidencia
+
+La evidencia final debe cubrir primer paso, calendario, último espacio,
+formulario, confirmación, gestión privada, reprogramación, cancelación y ambos
+correos. Antes de guardar una captura se redactan tokens completos, correos,
+teléfonos y cualquier dato real. Las capturas no deben contener query strings
+privados.
+
+La Preview necesita las variables de Supabase y SMTP, el destinatario interno,
+`CRON_SECRET` y `APP_CANONICAL_URL`. Esta última debe ser el origen HTTPS
+explícito del alias estable de Preview: no se deriva de headers ni de
+`VERCEL_URL`. Producción usa como fallback
+`https://familia-ponquesito.vercel.app`.
+
+Commits principales del Reto 8:
+
+- Dominio y SQL: `85dfe8e`, `03bc11f`, `661fad0`.
+- Wizard: `fa740a2`, `d46586e`, `e1e942b`, `1f79ebb`.
+- Automatización: `84d66fe`, `c8564d9`, `679ff90`, `1aaae98`.
+- Gestión privada: `b12e493`, `b1a5ebf`, `61a5d53`.
+- Verificaciones de Supabase: `1c56904`, `930106b`.
+
+Limitaciones conocidas:
+
+- No existe cron que convierta automáticamente solicitudes en `expired`.
+- Reprogramar o cancelar registra eventos, pero no envía una notificación
+  adicional en este MVP.
+- Reenviar el correo privado requiere una futura rotación de token.
+- El rate limit en memoria no es global entre instancias serverless.
+- La evidencia y URL pública se registran solo después de una Preview exitosa;
+  no se inventan antes del despliegue.
