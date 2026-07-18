@@ -519,14 +519,24 @@ create table if not exists public.reservation_events (
   -- Contexto del evento (ej. {"previous_date": ..., "new_date": ...}).
   -- PROHIBIDO guardar aquí el token de gestión o el enlace privado.
   metadata jsonb,
+  -- Clave opcional para eventos terminales idempotentes. Los fallos no la
+  -- usan: se conserva cada intento y un reintento exitoso sigue siendo posible.
+  dedupe_key text,
   created_at timestamptz not null default now()
 );
+
+alter table public.reservation_events
+  add column if not exists dedupe_key text;
 
 comment on table public.reservation_events is
   'Historial de eventos por reserva (Reto 8): creación, correos, reprogramaciones, cancelaciones. La metadata nunca contiene tokens ni enlaces privados.';
 
 create index if not exists reservation_events_reservation_event_idx
   on public.reservation_events (reservation_id, event_type);
+
+create unique index if not exists reservation_events_dedupe_idx
+  on public.reservation_events (reservation_id, dedupe_key)
+  where dedupe_key is not null;
 
 alter table public.reservation_events enable row level security;
 

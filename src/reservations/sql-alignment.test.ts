@@ -105,4 +105,11 @@ describe("alineación supabase/schema.sql ↔ constantes TypeScript", () => {
       expect(reto8).toContain(`check (btrim(${column}) <> '')`);
     }
   });
+
+  it("reservation_events deduplica solo eventos terminales con clave", () => {
+    expect(reto8).toContain("add column if not exists dedupe_key text");
+    expect(reto8).toContain("create unique index if not exists reservation_events_dedupe_idx");
+    expect(reto8).toContain("on public.reservation_events (reservation_id, dedupe_key)");
+    expect(reto8).toContain("where dedupe_key is not null");
+  });
 });

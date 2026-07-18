@@ -58,6 +58,19 @@ begin
                   and indexname = 'reservation_events_reservation_event_idx') then
     raise exception '[verificación Reto 8] falta el índice reservation_events_reservation_event_idx';
   end if;
+  if not exists (select 1 from pg_indexes where schemaname = 'public'
+                  and indexname = 'reservation_events_dedupe_idx'
+                  and indexdef like '%UNIQUE%'
+                  and indexdef like '%WHERE (dedupe_key IS NOT NULL)%') then
+    raise exception '[verificación Reto 8] falta el índice parcial único reservation_events_dedupe_idx';
+  end if;
+  if not exists (select 1 from information_schema.columns
+                  where table_schema = 'public'
+                    and table_name = 'reservation_events'
+                    and column_name = 'dedupe_key'
+                    and is_nullable = 'YES') then
+    raise exception '[verificación Reto 8] falta reservation_events.dedupe_key nullable';
+  end if;
 
   -- Constraints importantes (los nombrados y los generados por columna).
   if not exists (select 1 from pg_constraint
