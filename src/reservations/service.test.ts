@@ -9,6 +9,7 @@ import {
   cancelReservation,
   createReservation,
   getAvailability,
+  lookupReservation,
   rescheduleReservation,
   type CreateReservationInput,
 } from "./service";
@@ -171,6 +172,67 @@ describe("getAvailability", () => {
     const { supabase } = fakeSupabase([{ data: null, error: { message: "boom" } }]);
     const result = await getAvailability("2026-08-01", "2026-08-31", 1, { supabase });
     expect(result).toEqual({ ok: false, error: "service_unavailable" });
+  });
+});
+
+describe("lookupReservation", () => {
+  it("envía solo código y hash, y devuelve una proyección pública cerrada", async () => {
+    const { supabase, calls } = fakeSupabase([
+      {
+        data: {
+          ok: true,
+          reservation: {
+            code: "FP-8-TEST",
+            celebration_date: "2026-08-10",
+            status: "pending_deposit",
+            customer_name: "Ana Pérez",
+            guest_count: 20,
+            flavor: "Chocolate",
+            theme: "Flores",
+            fulfillment_type: "pickup",
+            delivery_details: null,
+            created_at: "2026-07-18T12:00:00Z",
+            capacity_points: 2,
+            can_reschedule: true,
+            can_cancel: true,
+            reschedule_reason: null,
+            cancellation_reason: null,
+            manage_token_hash: "no debe salir",
+            order_details: { private: true },
+          },
+        },
+      },
+    ]);
+
+    const result = await lookupReservation("FP-8-TEST", "token-claro", { supabase });
+
+    expect(calls[0]).toEqual({
+      fn: "get_cake_reservation",
+      params: {
+        p_code: "FP-8-TEST",
+        p_manage_token_hash: hashManageToken("token-claro"),
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("token-claro");
+    expect(JSON.stringify(result)).not.toContain("manage_token_hash");
+    expect(JSON.stringify(result)).not.toContain("order_details");
+    expect(result).toMatchObject({
+      ok: true,
+      reservation: { code: "FP-8-TEST", capacityPoints: 2, canCancel: true },
+    });
+  });
+
+  it("ofrece la misma respuesta para código o token incorrectos", async () => {
+    const response = { data: { ok: false, error: "reservation_not_found" } };
+    const first = fakeSupabase([response]);
+    const second = fakeSupabase([response]);
+
+    await expect(
+      lookupReservation("FP-8-NOPE", "token-valido", { supabase: first.supabase }),
+    ).resolves.toEqual({ ok: false, error: "reservation_not_found" });
+    await expect(
+      lookupReservation("FP-8-TEST", "token-malo", { supabase: second.supabase }),
+    ).resolves.toEqual({ ok: false, error: "reservation_not_found" });
   });
 });
 

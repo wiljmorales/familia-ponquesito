@@ -760,6 +760,81 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- Lectura privada para la página de gestión
+--
+-- Código + hash del token son una sola credencial. El resultado es una
+-- proyección pública cerrada: no expone ids, hash, order_details, referencia,
+-- eventos ni ningún dato de automatización.
+-- ---------------------------------------------------------------------------
+create or replace function public.get_cake_reservation(
+  p_code text,
+  p_manage_token_hash text
+)
+returns jsonb
+language plpgsql
+as $$
+declare
+  v_res public.cake_reservations%rowtype;
+  v_change_window_open boolean;
+  v_modifiable boolean;
+  v_reason text;
+begin
+  if nullif(trim(p_code), '') is null
+     or p_manage_token_hash is null
+     or p_manage_token_hash !~ '^[0-9a-f]{64}$' then
+    return jsonb_build_object('ok', false, 'error', 'reservation_not_found');
+  end if;
+
+  select * into v_res
+    from public.cake_reservations r
+   where r.code = trim(p_code)
+     and r.manage_token_hash = p_manage_token_hash;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'reservation_not_found');
+  end if;
+
+  v_change_window_open :=
+    public.agenda_business_now() < (v_res.celebration_date - 1)::timestamp;
+  v_modifiable :=
+    v_res.status in ('pending_deposit', 'confirmed', 'human_review')
+    and v_change_window_open;
+
+  v_reason := case
+    when v_res.status in ('cancelled', 'expired') then 'status_not_modifiable'
+    when not v_change_window_open then 'change_window_closed'
+    else null
+  end;
+
+  return jsonb_build_object(
+    'ok', true,
+    'reservation', jsonb_build_object(
+      'code', v_res.code,
+      'celebration_date', v_res.celebration_date::text,
+      'status', v_res.status,
+      'customer_name', v_res.customer_name,
+      'guest_count', v_res.guest_count,
+      'flavor', v_res.flavor,
+      'theme', v_res.theme,
+      'fulfillment_type', v_res.fulfillment_type,
+      'delivery_details', v_res.delivery_details,
+      'created_at', v_res.created_at,
+      'capacity_points', v_res.capacity_points,
+      'can_reschedule', v_modifiable,
+      'can_cancel', v_modifiable,
+      'reschedule_reason', v_reason,
+      'cancellation_reason', case
+        when v_reason = 'change_window_closed' then 'cancellation_window_closed'
+        when v_res.status = 'cancelled' then 'already_cancelled'
+        when v_res.status = 'expired' then 'status_not_cancellable'
+        else null
+      end
+    )
+  );
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- Reprogramación atómica
 --
 -- Orden de locks (a propósito, para que nunca haya ciclos):
@@ -808,7 +883,7 @@ begin
     return jsonb_build_object('ok', false, 'error', 'reservation_not_found');
   end if;
 
-  if v_res.status not in ('pending_deposit', 'confirmed') then
+  if v_res.status not in ('pending_deposit', 'confirmed', 'human_review') then
     return jsonb_build_object('ok', false, 'error', 'status_not_modifiable');
   end if;
 
@@ -846,18 +921,22 @@ begin
     return jsonb_build_object('ok', false, 'error', 'date_blocked');
   end if;
 
-  select coalesce(sum(r.capacity_points), 0)
-    into v_used
-    from public.cake_reservations r
-   where r.celebration_date = p_new_date
-     and r.status = any (public.agenda_capacity_consuming_statuses());
+  -- human_review cambia una fecha preferida y no aparta cupo. Para los
+  -- estados que sí consumen, la capacidad se comprueba bajo los locks.
+  if v_res.status = any (public.agenda_capacity_consuming_statuses()) then
+    select coalesce(sum(r.capacity_points), 0)
+      into v_used
+      from public.cake_reservations r
+     where r.celebration_date = p_new_date
+       and r.status = any (public.agenda_capacity_consuming_statuses());
 
-  if v_used + v_res.capacity_points > v_capacity_total then
-    return jsonb_build_object(
-      'ok', false,
-      'error', 'capacity_unavailable',
-      'capacity_remaining', greatest(v_capacity_total - v_used, 0)
-    );
+    if v_used + v_res.capacity_points > v_capacity_total then
+      return jsonb_build_object(
+        'ok', false,
+        'error', 'capacity_unavailable',
+        'capacity_remaining', greatest(v_capacity_total - v_used, 0)
+      );
+    end if;
   end if;
 
   -- Reprogramar conserva el estado (pending_deposit sigue pendiente,
@@ -891,7 +970,7 @@ $$;
 -- ---------------------------------------------------------------------------
 -- Cancelación
 --
--- Solo pending_deposit y confirmed pueden cancelarse, hasta 24h antes del
+-- pending_deposit, confirmed y human_review pueden cancelarse, hasta 24h antes del
 -- inicio del día de la celebración (misma aproximación de medianoche que
 -- la reprogramación). Libera el cupo de inmediato: la fila deja de contar
 -- en la suma de estados que consumen.
@@ -927,7 +1006,7 @@ begin
     return jsonb_build_object('ok', false, 'error', 'already_cancelled');
   end if;
 
-  if v_res.status not in ('pending_deposit', 'confirmed') then
+  if v_res.status not in ('pending_deposit', 'confirmed', 'human_review') then
     return jsonb_build_object('ok', false, 'error', 'status_not_cancellable');
   end if;
 
@@ -967,6 +1046,7 @@ revoke execute on function public.agenda_business_now() from public, anon, authe
 revoke execute on function public.agenda_business_today() from public, anon, authenticated;
 revoke execute on function public.get_production_availability(date, date, integer) from public, anon, authenticated;
 revoke execute on function public.reserve_production_slot(date, integer, text, text, text, text, text, text, integer, text, text, text, text, text, jsonb) from public, anon, authenticated;
+revoke execute on function public.get_cake_reservation(text, text) from public, anon, authenticated;
 revoke execute on function public.reschedule_cake_reservation(text, text, date) from public, anon, authenticated;
 revoke execute on function public.cancel_cake_reservation(text, text) from public, anon, authenticated;
 
@@ -978,5 +1058,6 @@ grant execute on function public.agenda_business_now() to service_role;
 grant execute on function public.agenda_business_today() to service_role;
 grant execute on function public.get_production_availability(date, date, integer) to service_role;
 grant execute on function public.reserve_production_slot(date, integer, text, text, text, text, text, text, integer, text, text, text, text, text, jsonb) to service_role;
+grant execute on function public.get_cake_reservation(text, text) to service_role;
 grant execute on function public.reschedule_cake_reservation(text, text, date) to service_role;
 grant execute on function public.cancel_cake_reservation(text, text) to service_role;

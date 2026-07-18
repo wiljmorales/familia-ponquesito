@@ -8,7 +8,11 @@ import {
   DEFAULT_DAILY_CAPACITY,
   SIMPLE_CAKE_POINTS,
 } from "./capacity";
-import { CAPACITY_CONSUMING_STATUSES, RESERVATION_STATUSES } from "./types";
+import {
+  CAPACITY_CONSUMING_STATUSES,
+  MODIFIABLE_RESERVATION_STATUSES,
+  RESERVATION_STATUSES,
+} from "./types";
 
 /**
  * Guardia de alineación SQL ↔ TypeScript (Reto 8). La autoridad en tiempo
@@ -117,5 +121,44 @@ describe("alineación supabase/schema.sql ↔ constantes TypeScript", () => {
     expect(reto8).toContain("'capacity_total', v_capacity_total");
     expect(reto8).toContain("'capacity_used',");
     expect(reto8).toContain("'capacity_remaining',");
+  });
+
+  it("lookup privado exige código + hash y no proyecta campos internos", () => {
+    const start = reto8.indexOf("create or replace function public.get_cake_reservation");
+    const end = reto8.indexOf("-- Reprogramación atómica", start);
+    const lookup = reto8.slice(start, end);
+    expect(start).toBeGreaterThan(-1);
+    expect(lookup).toContain("r.code = trim(p_code)");
+    expect(lookup).toContain("r.manage_token_hash = p_manage_token_hash");
+    for (const forbidden of [
+      "'reservation_id'",
+      "'manage_token_hash'",
+      "'order_details'",
+      "'reference_image_path'",
+      "'customer_email'",
+      "'customer_phone'",
+    ]) {
+      expect(lookup).not.toContain(forbidden);
+    }
+  });
+
+  it("los estados modificables coinciden en lookup, reprogramación y cancelación", () => {
+    const sqlList = MODIFIABLE_RESERVATION_STATUSES.map((status) => `'${status}'`).join(", ");
+    expect(reto8.match(new RegExp(`in \\(${sqlList}\\)`, "g"))).toHaveLength(3);
+  });
+
+  it("los RPC privados de Etapa 5 solo se conceden a service_role", () => {
+    for (const signature of [
+      "get_cake_reservation(text, text)",
+      "reschedule_cake_reservation(text, text, date)",
+      "cancel_cake_reservation(text, text)",
+    ]) {
+      expect(reto8).toContain(
+        `revoke execute on function public.${signature} from public, anon, authenticated`,
+      );
+      expect(reto8).toContain(
+        `grant execute on function public.${signature} to service_role`,
+      );
+    }
   });
 });

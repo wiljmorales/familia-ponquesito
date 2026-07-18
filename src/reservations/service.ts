@@ -10,6 +10,7 @@ import type {
   INITIAL_RESERVATION_STATUSES,
   ReservationErrorCode,
   ReservationStatus,
+  PublicReservation,
 } from "./types";
 
 /**
@@ -95,6 +96,31 @@ interface RpcErrorPayload {
 }
 
 type RpcPayload = RpcSuccessPayload | RpcErrorPayload;
+
+interface LookupRpcSuccess {
+  ok: true;
+  reservation: {
+    code: string;
+    celebration_date: string;
+    status: ReservationStatus;
+    customer_name: string;
+    guest_count: number;
+    flavor: string;
+    theme: string | null;
+    fulfillment_type: FulfillmentType;
+    delivery_details: string | null;
+    created_at: string;
+    capacity_points: 1 | 2 | 3;
+    can_reschedule: boolean;
+    can_cancel: boolean;
+    reschedule_reason: string | null;
+    cancellation_reason: string | null;
+  };
+}
+
+type LookupRpcPayload =
+  | LookupRpcSuccess
+  | { ok: false; error: "reservation_not_found" };
 
 export async function createReservation(
   input: CreateReservationInput,
@@ -182,6 +208,52 @@ export async function getAvailability(
   }
 
   return { ok: true, days: data as AvailabilityRow[] };
+}
+
+export type LookupReservationResult =
+  | { ok: true; reservation: PublicReservation }
+  | { ok: false; error: "reservation_not_found" | "service_unavailable" };
+
+export async function lookupReservation(
+  code: string,
+  manageToken: string,
+  deps: ReservationServiceDeps = {},
+): Promise<LookupReservationResult> {
+  const supabase = deps.supabase ?? getSupabaseServiceClient();
+  const { data, error } = await supabase.rpc("get_cake_reservation", {
+    p_code: code,
+    p_manage_token_hash: hashManageToken(manageToken),
+  });
+
+  if (error || data == null) {
+    console.error("[reservations] get_cake_reservation falló:", error?.message);
+    return { ok: false, error: "service_unavailable" };
+  }
+
+  const payload = data as LookupRpcPayload;
+  if (!payload.ok) return payload;
+
+  const reservation = payload.reservation;
+  return {
+    ok: true,
+    reservation: {
+      code: reservation.code,
+      celebrationDate: reservation.celebration_date,
+      status: reservation.status,
+      customerName: reservation.customer_name,
+      guestCount: reservation.guest_count,
+      flavor: reservation.flavor,
+      theme: reservation.theme ?? undefined,
+      fulfillmentType: reservation.fulfillment_type,
+      deliveryDetails: reservation.delivery_details ?? undefined,
+      createdAt: reservation.created_at,
+      capacityPoints: reservation.capacity_points,
+      canReschedule: reservation.can_reschedule,
+      canCancel: reservation.can_cancel,
+      rescheduleReason: reservation.reschedule_reason ?? undefined,
+      cancellationReason: reservation.cancellation_reason ?? undefined,
+    },
+  };
 }
 
 export type ManageReservationResult =

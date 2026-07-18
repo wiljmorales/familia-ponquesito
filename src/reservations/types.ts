@@ -33,7 +33,11 @@ export const CAPACITY_CONSUMING_STATUSES = ["pending_deposit", "confirmed"] as c
 export const INITIAL_RESERVATION_STATUSES = ["pending_deposit", "human_review"] as const;
 
 /** Estados desde los cuales el cliente puede reprogramar o cancelar. */
-export const MODIFIABLE_RESERVATION_STATUSES = ["pending_deposit", "confirmed"] as const;
+export const MODIFIABLE_RESERVATION_STATUSES = [
+  "pending_deposit",
+  "confirmed",
+  "human_review",
+] as const;
 
 export const FULFILLMENT_TYPES = ["pickup", "delivery"] as const;
 export type FulfillmentType = (typeof FULFILLMENT_TYPES)[number];
@@ -94,4 +98,23 @@ export interface DayAvailability {
   capacityRemaining: number;
   /** true si tras reservar este pedido el día quedaría en 0 cupos. */
   isLastSlot: boolean;
+}
+
+/** Proyección pública y cerrada del RPC privado de gestión. */
+export interface PublicReservation {
+  code: string;
+  celebrationDate: string;
+  status: ReservationStatus;
+  customerName: string;
+  guestCount: number;
+  flavor: string;
+  theme?: string;
+  fulfillmentType: FulfillmentType;
+  deliveryDetails?: string;
+  createdAt: string;
+  capacityPoints: 1 | 2 | 3;
+  canReschedule: boolean;
+  canCancel: boolean;
+  rescheduleReason?: string;
+  cancellationReason?: string;
 }
