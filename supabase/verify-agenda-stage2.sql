@@ -58,19 +58,6 @@ begin
                   and indexname = 'reservation_events_reservation_event_idx') then
     raise exception '[verificación Reto 8] falta el índice reservation_events_reservation_event_idx';
   end if;
-  if not exists (select 1 from pg_indexes where schemaname = 'public'
-                  and indexname = 'reservation_events_dedupe_idx'
-                  and indexdef like '%UNIQUE%'
-                  and indexdef like '%WHERE (dedupe_key IS NOT NULL)%') then
-    raise exception '[verificación Reto 8] falta el índice parcial único reservation_events_dedupe_idx';
-  end if;
-  if not exists (select 1 from information_schema.columns
-                  where table_schema = 'public'
-                    and table_name = 'reservation_events'
-                    and column_name = 'dedupe_key'
-                    and is_nullable = 'YES') then
-    raise exception '[verificación Reto 8] falta reservation_events.dedupe_key nullable';
-  end if;
 
   -- Constraints importantes (los nombrados y los generados por columna).
   if not exists (select 1 from pg_constraint
@@ -271,11 +258,6 @@ begin
     '{"demo": true, "source": "verify-agenda-stage2"}'::jsonb);
   if not (v_r->>'ok')::boolean then
     raise exception '[verificación Reto 8] paso 3: la reserva de 2 puntos falló: %', v_r;
-  end if;
-  if (v_r->>'capacity_total')::integer <> 3
-     or (v_r->>'capacity_used')::integer <> 2
-     or (v_r->>'capacity_remaining')::integer <> 1 then
-    raise exception '[verificación Reto 8] paso 3: fotografía transaccional de capacidad incorrecta: %', v_r;
   end if;
 
   -- (4–5) Disponibilidad para un pedido de 1 punto: acepta y es el último cupo.

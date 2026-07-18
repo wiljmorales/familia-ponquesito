@@ -53,6 +53,14 @@ interface AvailabilityRow {
   can_accept: boolean;
 }
 
+interface ReservationRpcResult {
+  ok: boolean;
+  error?: string;
+  capacity_total?: number;
+  capacity_used?: number;
+  capacity_remaining?: number;
+}
+
 function fail(message: string): never {
   throw new Error(`ASERCIÓN FALLIDA: ${message}`);
 }
@@ -143,7 +151,7 @@ async function main() {
         throw new Error(`reserve_production_slot falló a nivel de transporte: ${response.error?.message}`);
       }
     }
-    const results = [first.data, second.data] as Array<{ ok: boolean; error?: string }>;
+    const results = [first.data, second.data] as ReservationRpcResult[];
     const winners = results.filter((r) => r.ok);
     const losers = results.filter((r) => !r.ok);
 
@@ -152,6 +160,17 @@ async function main() {
     }
     if (losers.length !== 1 || losers[0].error !== "capacity_unavailable") {
       fail(`la perdedora debía recibir capacity_unavailable; llegó ${JSON.stringify(losers)}`);
+    }
+    const winner = winners[0];
+    if (
+      winner.capacity_total !== 1 ||
+      winner.capacity_used !== 1 ||
+      winner.capacity_remaining !== 0
+    ) {
+      fail(`la ganadora debía devolver capacidad total/usada/restante = 1/1/0; llegó ${JSON.stringify(winner)}`);
+    }
+    if (winner.capacity_remaining !== winner.capacity_total - winner.capacity_used) {
+      fail(`la ganadora devolvió una fotografía de capacidad incoherente: ${JSON.stringify(winner)}`);
     }
 
     const after = await getDayAvailability(supabase);
@@ -163,6 +182,7 @@ async function main() {
     }
 
     console.log("✔ Una sola reserva ganó; la otra recibió capacity_unavailable.");
+    console.log("✔ La ganadora devolvió capacidad transaccional total/usada/restante = 1/1/0.");
     console.log(`✔ Capacidad final del día: usado=${after.capacity_used} / total=${after.capacity_total} (sin sobreventa).`);
     console.log("VERIFICACIÓN DE CONCURRENCIA: OK");
   } catch (error) {
