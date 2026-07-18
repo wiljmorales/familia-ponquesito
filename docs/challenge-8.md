@@ -161,6 +161,15 @@ explícito del alias estable de Preview: no se deriva de headers ni de
 `VERCEL_URL`. Producción usa como fallback
 `https://familia-ponquesito.vercel.app`.
 
+Preview de la rama de entrega:
+
+`https://familia-ponquesito-git-reto-8-agend-3be41e-wiljmorales-projects.vercel.app`
+
+`APP_CANONICAL_URL` está limitada en Vercel a la rama
+`reto-8/agenda-ponquesito`, de modo que los correos de esta demostración abren
+la ruta privada de la misma Preview sin alterar el origen canónico de
+producción.
+
 Commits principales del Reto 8:
 
 - Dominio y SQL: `85dfe8e`, `03bc11f`, `661fad0`.
