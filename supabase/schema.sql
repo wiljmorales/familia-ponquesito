@@ -447,17 +447,20 @@ create table if not exists public.cake_reservations (
   -- Código legible único (ej. "FP-8-K7M2"). Identifica la reserva ante el
   -- cliente, pero NUNCA autoriza por sí solo: gestionar exige además el
   -- token privado (ver manage_token_hash).
-  code text not null unique,
+  code text not null unique check (btrim(code) <> ''),
   celebration_date date not null,
   capacity_points integer not null check (capacity_points in (1, 2, 3)),
   status text not null default 'pending_deposit' check (
     status in ('pending_deposit', 'confirmed', 'human_review', 'cancelled', 'expired')
   ),
-  customer_name text not null,
-  customer_email text not null,
-  customer_phone text not null,
+  -- Los datos esenciales no pueden ser vacíos ni solo espacios. El formato
+  -- fino de correo/teléfono queda en Zod y el servicio (validaciones de
+  -- formato en SQL serían frágiles); aquí solo lo estructural.
+  customer_name text not null check (btrim(customer_name) <> ''),
+  customer_email text not null check (btrim(customer_email) <> ''),
+  customer_phone text not null check (btrim(customer_phone) <> ''),
   guest_count integer not null check (guest_count > 0),
-  flavor text not null,
+  flavor text not null check (btrim(flavor) <> ''),
   theme text,
   fulfillment_type text not null check (fulfillment_type in ('pickup', 'delivery')),
   delivery_details text,
@@ -466,13 +469,23 @@ create table if not exists public.cake_reservations (
   -- Detalle completo del pedido tal como lo clasificó el servidor
   -- (respuestas del formulario + motivos de la clasificación).
   order_details jsonb not null,
-  -- SHA-256 (hex, 64 chars) del token privado de gestión. El token en
-  -- claro solo viaja en el enlace del correo del cliente; aquí nunca.
-  manage_token_hash text not null check (char_length(manage_token_hash) = 64),
+  -- SHA-256 (hex minúscula, 64 chars) del token privado de gestión. El
+  -- token en claro solo viaja en el enlace del correo del cliente; aquí
+  -- nunca.
+  manage_token_hash text not null check (manage_token_hash ~ '^[0-9a-f]{64}$'),
   source text not null default 'agenda',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  cancelled_at timestamptz
+  cancelled_at timestamptz,
+  -- cancelled_at existe si y solo si la reserva está cancelada: ningún
+  -- flujo (ni un insert manual) puede dejar los dos campos incoherentes.
+  constraint cake_reservations_cancelled_at_coherence check (
+    (status = 'cancelled') = (cancelled_at is not null)
+  ),
+  -- Una entrega a domicilio sin dirección/indicaciones no es procesable.
+  constraint cake_reservations_delivery_details_required check (
+    fulfillment_type <> 'delivery' or btrim(coalesce(delivery_details, '')) <> ''
+  )
 );
 
 comment on table public.cake_reservations is
@@ -625,13 +638,14 @@ declare
 begin
   if p_celebration_date is null
      or nullif(trim(p_code), '') is null
-     or p_manage_token_hash is null or char_length(p_manage_token_hash) <> 64
+     or p_manage_token_hash is null or p_manage_token_hash !~ '^[0-9a-f]{64}$'
      or nullif(trim(p_customer_name), '') is null
      or nullif(trim(p_customer_email), '') is null
      or nullif(trim(p_customer_phone), '') is null
      or p_guest_count is null or p_guest_count <= 0
      or nullif(trim(p_flavor), '') is null
      or p_fulfillment_type is null or p_fulfillment_type not in ('pickup', 'delivery')
+     or (p_fulfillment_type = 'delivery' and nullif(trim(p_delivery_details), '') is null)
      or p_order_details is null then
     return jsonb_build_object('ok', false, 'error', 'missing_data');
   end if;

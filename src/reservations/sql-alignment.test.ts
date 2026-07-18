@@ -82,4 +82,27 @@ describe("alineación supabase/schema.sql ↔ constantes TypeScript", () => {
     const sqlStatuses = match![1].split(",").map((s) => s.trim().replace(/^'|'$/g, ""));
     expect(sqlStatuses).toEqual([...RESERVATION_STATUSES]);
   });
+
+  it("manage_token_hash exige SHA-256 hex tanto en la tabla como en el RPC", () => {
+    expect(reto8).toContain("manage_token_hash ~ '^[0-9a-f]{64}$'");
+    expect(reto8).toContain("p_manage_token_hash !~ '^[0-9a-f]{64}$'");
+  });
+
+  it("la tabla impone coherencia entre cancelled_at y status = 'cancelled'", () => {
+    expect(reto8).toContain("constraint cake_reservations_cancelled_at_coherence check");
+    expect(reto8).toContain("(status = 'cancelled') = (cancelled_at is not null)");
+  });
+
+  it("delivery exige detalles de entrega en la tabla y en el RPC", () => {
+    expect(reto8).toContain("constraint cake_reservations_delivery_details_required check");
+    expect(reto8).toContain(
+      "(p_fulfillment_type = 'delivery' and nullif(trim(p_delivery_details), '') is null)",
+    );
+  });
+
+  it("los datos esenciales de texto rechazan valores de solo espacios", () => {
+    for (const column of ["code", "customer_name", "customer_email", "customer_phone", "flavor"]) {
+      expect(reto8).toContain(`check (btrim(${column}) <> '')`);
+    }
+  });
 });
