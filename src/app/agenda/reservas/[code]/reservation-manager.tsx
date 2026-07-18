@@ -65,18 +65,13 @@ export default function ReservationManager({
     (text: string) => setMessage({ kind: "error", text }),
     [],
   );
-  const finishReschedule = useCallback((date: string, text: string) => {
-    setReservation((current) => ({ ...current, celebrationDate: date }));
+  const finishReschedule = useCallback((updated: PublicReservation, text: string) => {
+    setReservation(updated);
     setMessage({ kind: "success", text });
     setMode("summary");
   }, []);
-  const finishCancellation = useCallback((text: string) => {
-    setReservation((current) => ({
-      ...current,
-      status: "cancelled",
-      canCancel: false,
-      canReschedule: false,
-    }));
+  const finishCancellation = useCallback((updated: PublicReservation, text: string) => {
+    setReservation(updated);
     setMessage({ kind: "success", text });
     setMode("summary");
   }, []);
@@ -225,7 +220,7 @@ function ReschedulePanel({
   reservation: PublicReservation;
   token: string;
   onClose: () => void;
-  onSuccess: (date: string, message: string) => void;
+  onSuccess: (reservation: PublicReservation, message: string) => void;
   onError: (message: string) => void;
 }) {
   const initialMonth = reservation.celebrationDate.slice(0, 7);
@@ -268,7 +263,7 @@ function ReschedulePanel({
         newDate: selectedDate,
         confirmed: true,
       });
-      if (result.ok) onSuccess(result.celebrationDate, result.message);
+      if (result.ok) onSuccess(result.reservation, result.message);
       else onError(result.message);
     });
   }
@@ -350,7 +345,7 @@ function CancelPanel({
   reservation: PublicReservation;
   token: string;
   onClose: () => void;
-  onSuccess: (message: string) => void;
+  onSuccess: (reservation: PublicReservation, message: string) => void;
   onError: (message: string) => void;
 }) {
   const [confirmed, setConfirmed] = useState(false);
@@ -396,7 +391,7 @@ function CancelPanel({
                 token,
                 confirmed: true,
               });
-              if (result.ok) onSuccess(result.message);
+              if (result.ok) onSuccess(result.reservation, result.message);
               else onError(result.message);
             })
           }

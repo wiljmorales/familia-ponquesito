@@ -109,11 +109,20 @@ describe("rescheduleManagedReservation", () => {
   });
 
   it("devuelve estado posterior seguro y no devuelve token ni id interno", async () => {
+    const updated = { ...reservation, celebrationDate: "2026-08-12" };
     const result = await rescheduleManagedReservation(
       { code: reservation.code, token: "x".repeat(32), newDate: "2026-08-12", confirmed: true },
-      deps(),
+      deps({
+        lookupReservationFn: vi.fn(async () => ({
+          ok: true as const,
+          reservation: updated,
+        })),
+      }),
     );
-    expect(result).toMatchObject({ ok: true, celebrationDate: "2026-08-12" });
+    expect(result).toMatchObject({
+      ok: true,
+      reservation: { code: reservation.code, celebrationDate: "2026-08-12" },
+    });
     expect(JSON.stringify(result)).not.toContain("x".repeat(32));
     expect(JSON.stringify(result)).not.toContain("internal-id");
   });
@@ -175,9 +184,22 @@ describe("cancelManagedReservation", () => {
 
     const success = await cancelManagedReservation(
       { code: reservation.code, token: "x".repeat(32), confirmed: true },
-      testDeps,
+      deps({
+        lookupReservationFn: vi.fn(async () => ({
+          ok: true as const,
+          reservation: {
+            ...reservation,
+            status: "cancelled" as const,
+            canCancel: false,
+            canReschedule: false,
+          },
+        })),
+      }),
     );
-    expect(success).toMatchObject({ ok: true, status: "cancelled" });
+    expect(success).toMatchObject({
+      ok: true,
+      reservation: { code: reservation.code, status: "cancelled", canCancel: false },
+    });
     expect(JSON.stringify(success)).not.toContain("x".repeat(32));
   });
 

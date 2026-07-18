@@ -20,6 +20,7 @@ import {
   type ManageReservationResult,
 } from "@/reservations/service";
 import type { DayAvailability } from "@/reservations/types";
+import type { PublicReservation } from "@/reservations/types";
 
 const GENERIC_ERROR =
   "No pudimos completar la operación. Verifica el enlace e inténtalo de nuevo.";
@@ -122,7 +123,7 @@ export async function fetchRescheduleAvailability(
 }
 
 export type ReservationMutationResult =
-  | { ok: true; message: string; celebrationDate: string; status: string }
+  | { ok: true; message: string; reservation: PublicReservation }
   | { ok: false; message: string };
 
 export async function rescheduleManagedReservation(
@@ -140,6 +141,8 @@ export async function rescheduleManagedReservation(
     parsed.data.newDate,
   );
   if (!result.ok) return { ok: false, message: reasonMessage(result.error) };
+  const refreshed = await deps.lookupReservationFn(parsed.data.code, parsed.data.token);
+  if (!refreshed.ok) return { ok: false, message: safeLookupMessage(refreshed) };
 
   return {
     ok: true,
@@ -147,8 +150,7 @@ export async function rescheduleManagedReservation(
       result.status === "human_review"
         ? "Actualizamos tu fecha preferida. Sigue en revisión y aún no está reservada."
         : "Tu reserva fue reprogramada correctamente.",
-    celebrationDate: result.newDate ?? parsed.data.newDate,
-    status: result.status,
+    reservation: refreshed.reservation,
   };
 }
 
@@ -163,12 +165,13 @@ export async function cancelManagedReservation(
 
   const result = await deps.cancelReservationFn(parsed.data.code, parsed.data.token);
   if (!result.ok) return { ok: false, message: reasonMessage(result.error) };
+  const refreshed = await deps.lookupReservationFn(parsed.data.code, parsed.data.token);
+  if (!refreshed.ok) return { ok: false, message: safeLookupMessage(refreshed) };
 
   return {
     ok: true,
     message: "Tu solicitud fue cancelada. Esta acción no puede deshacerse desde la aplicación.",
-    celebrationDate: result.celebrationDate ?? "",
-    status: "cancelled",
+    reservation: refreshed.reservation,
   };
 }
 
