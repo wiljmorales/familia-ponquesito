@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createPrototypeOrders } from "@/data/prototype-orders";
-import { addDaysISO } from "@/lib/prototype/dates";
+import { addDaysISO } from "@/lib/business-dates";
 import {
   applyBusinessGuardrails,
   extractOrderCode,

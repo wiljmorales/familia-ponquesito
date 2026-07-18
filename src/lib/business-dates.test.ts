@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDaysISO, businessTodayISO, daysBetweenISO } from "./dates";
+import { addDaysISO, businessTodayISO, daysBetweenISO } from "./business-dates";
 
 describe("addDaysISO", () => {
   it("suma días dentro del mismo mes", () => {

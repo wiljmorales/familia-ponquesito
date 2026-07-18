@@ -1,41 +1,17 @@
 import { MIN_LEAD_DAYS } from "@/lib/constants/business";
+import { businessTodayISO, daysBetweenISO } from "@/lib/business-dates";
 
 export type LeadPriority = "not_viable" | "urgent" | "high" | "normal";
-
-/**
- * Zona horaria del negocio (Barquisimeto, Venezuela). La clasificación se
- * calcula sobre la fecha calendario en esta zona, no en la del servidor:
- * en Vercel el runtime corre en UTC, y Caracas es UTC-4 sin horario de
- * verano, así que usar `new Date().getDate()` del servidor movería el
- * límite de "hoy" varias horas antes de la medianoche real de Caracas.
- */
-const BUSINESS_TIMEZONE = "America/Caracas";
 
 /** Última fecha clasificada como "high" antes de pasar a "normal". */
 const HIGH_PRIORITY_MAX_DAYS = 10;
 
 /**
  * "YYYY-MM-DD" del día calendario actual en la zona horaria del negocio.
- * Exportada porque el reporte semanal (Reto 6) calcula su periodo sobre el
- * mismo calendario de Caracas que esta clasificación.
+ * Alias histórico: el reporte semanal (Reto 6) la importa con este nombre;
+ * la implementación vive en src/lib/business-dates.ts desde el Reto 8.
  */
-export function businessTodayString(now: Date): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: BUSINESS_TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(now);
-}
-
-/** Diferencia en días calendario entre dos "YYYY-MM-DD" (b - a). */
-function daysBetween(a: string, b: string): number {
-  const [aYear, aMonth, aDay] = a.split("-").map(Number);
-  const [bYear, bMonth, bDay] = b.split("-").map(Number);
-  const aUtc = Date.UTC(aYear, aMonth - 1, aDay);
-  const bUtc = Date.UTC(bYear, bMonth - 1, bDay);
-  return Math.round((bUtc - aUtc) / (24 * 60 * 60 * 1000));
-}
+export const businessTodayString = businessTodayISO;
 
 /**
  * Clasifica la prioridad de un lead según su anticipación real (días entre
@@ -47,7 +23,7 @@ export function classifyLeadPriority(
   celebrationDate: string,
   now: Date = new Date(),
 ): LeadPriority {
-  const daysUntil = daysBetween(businessTodayString(now), celebrationDate);
+  const daysUntil = daysBetweenISO(businessTodayString(now), celebrationDate);
 
   if (daysUntil < MIN_LEAD_DAYS) return "not_viable";
   if (daysUntil <= MIN_LEAD_DAYS + 1) return "urgent";

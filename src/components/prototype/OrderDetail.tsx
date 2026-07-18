@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { CakeIcon } from "@/components/ui/icons";
 import { formatDateEs } from "@/email/format-date";
-import { daysBetweenISO } from "@/lib/prototype/dates";
+import { daysBetweenISO } from "@/lib/business-dates";
 import { canPrepareQuote, orderAttention } from "@/lib/prototype/reducer";
 import type { PrototypeOrder } from "@/types/prototype";
 import FocusHeading from "./FocusHeading";

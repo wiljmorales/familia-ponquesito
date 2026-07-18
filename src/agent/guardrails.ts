@@ -1,5 +1,5 @@
 import { MIN_LEAD_DAYS } from "@/lib/constants/business";
-import { addDaysISO, daysBetweenISO } from "@/lib/prototype/dates";
+import { addDaysISO, daysBetweenISO } from "@/lib/business-dates";
 import type { PrototypeOrder } from "@/types/prototype";
 import {
   AGENT_URGENCIES,

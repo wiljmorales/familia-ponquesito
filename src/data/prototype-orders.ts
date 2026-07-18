@@ -15,7 +15,7 @@
  */
 
 import type { PrototypeOrder } from "@/types/prototype";
-import { addDaysISO } from "@/lib/prototype/dates";
+import { addDaysISO } from "@/lib/business-dates";
 
 /** Contacto claramente ficticio, igual en todos los pedidos demo. */
 export const DEMO_PHONE = "0412-0000000";
