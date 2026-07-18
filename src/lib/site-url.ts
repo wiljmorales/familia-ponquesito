@@ -4,10 +4,34 @@
  * Los enlaces sensibles JAMÁS se construyen desde headers del request
  * (Host/Origin son controlables por el cliente).
  *
- * Decisión deliberada: previews y entornos locales también generan enlaces
- * hacia producción. Así un correo nunca apunta a un host efímero o interno.
+ * APP_CANONICAL_URL permite que una Preview controlada genere enlaces hacia
+ * su alias estable. Si no se configura, se usa producción. Nunca se infiere
+ * desde VERCEL_URL, Host, Origin ni headers del request.
  */
-export const SITE_URL = "https://familia-ponquesito.vercel.app";
+const PRODUCTION_SITE_URL = "https://familia-ponquesito.vercel.app";
+
+export function canonicalSiteUrl(configured = process.env.APP_CANONICAL_URL): string {
+  const value = configured?.trim() || PRODUCTION_SITE_URL;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("APP_CANONICAL_URL debe ser una URL HTTPS explícita.");
+  }
+  if (
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error("APP_CANONICAL_URL debe ser un origen HTTPS sin ruta ni credenciales.");
+  }
+  return url.origin;
+}
+
+export const SITE_URL = canonicalSiteUrl();
 
 /** URL absoluta a partir de una ruta interna ("/agenda/reservas/..."). */
 export function absoluteUrl(path: string): string {

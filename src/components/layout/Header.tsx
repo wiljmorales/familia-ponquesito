@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { href: "#galeria", label: "Galería" },
   { href: "#como-funciona", label: "Cómo funciona" },
   { href: "#sabores", label: "Sabores" },
+  { href: "/agenda", label: "Reserva tu fecha" },
 ];
 
 export default function Header() {
