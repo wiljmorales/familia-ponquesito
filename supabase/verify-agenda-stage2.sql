@@ -272,6 +272,11 @@ begin
   if not (v_r->>'ok')::boolean then
     raise exception '[verificación Reto 8] paso 3: la reserva de 2 puntos falló: %', v_r;
   end if;
+  if (v_r->>'capacity_total')::integer <> 3
+     or (v_r->>'capacity_used')::integer <> 2
+     or (v_r->>'capacity_remaining')::integer <> 1 then
+    raise exception '[verificación Reto 8] paso 3: fotografía transaccional de capacidad incorrecta: %', v_r;
+  end if;
 
   -- (4–5) Disponibilidad para un pedido de 1 punto: acepta y es el último cupo.
   select * into v_row from public.get_production_availability(v_date, v_date, 1);

@@ -1,6 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
+import { after } from "next/server";
 import { addDaysISO, businessTodayISO } from "@/lib/business-dates";
 import { generateReferenceCode } from "@/lib/reference-code";
 import { MIN_LEAD_DAYS } from "@/lib/constants/business";
@@ -25,6 +26,11 @@ import {
   type GetAvailabilityResult,
 } from "@/reservations/service";
 import type { DayAvailability } from "@/reservations/types";
+import { absoluteUrl } from "@/lib/site-url";
+import { processReservationLead } from "@/leads/service";
+import type { ProcessLeadInput, ReservationLeadDetails } from "@/leads/types";
+import type { ReservationEmailContext } from "@/email/templates/reservation-types";
+import { FORM_FLAVOR_OPTIONS } from "@/lib/constants/business";
 
 /**
  * Server Actions del wizard público /agenda (Reto 8, Etapa 3).
@@ -64,6 +70,8 @@ export interface AgendaActionDeps {
   ) => Promise<CreateReservationResult>;
   businessTodayISOFn: () => string;
   isReservationAllowedFn: () => Promise<boolean>;
+  scheduleAfterFn: (task: () => Promise<void>) => void;
+  processReservationLeadFn: typeof processReservationLead;
 }
 
 async function defaultReservationAllowed(): Promise<boolean> {
@@ -83,6 +91,8 @@ const DEFAULT_DEPS: AgendaActionDeps = {
   createReservationFn: createReservation,
   businessTodayISOFn: businessTodayISO,
   isReservationAllowedFn: defaultReservationAllowed,
+  scheduleAfterFn: (task) => after(task),
+  processReservationLeadFn: processReservationLead,
 };
 
 /**
@@ -290,8 +300,46 @@ export async function submitAgendaReservation(
   });
 
   if (result.ok) {
-    // result.manageToken se descarta a propósito en esta etapa (ver nota
-    // del encabezado): nunca se registra ni se muestra.
+    const reservation = reservationLeadDetails(values, {
+      code: result.code,
+      status,
+      points,
+      reasons,
+    });
+    const emailContext: ReservationEmailContext = {
+      manageUrl: absoluteUrl(
+        `/agenda/reservas/${encodeURIComponent(result.code)}?token=${encodeURIComponent(result.manageToken)}`,
+      ),
+      capacity: {
+        total: result.capacityTotal,
+        used: result.capacityUsed,
+        remaining: result.capacityRemaining,
+        provisional: status === "human_review",
+      },
+    };
+    const leadInput: ProcessLeadInput & {
+      source: "cake_reservation";
+      referenceCode: string;
+      reservation: ReservationLeadDetails;
+    } = {
+      source: "cake_reservation",
+      sourceId: result.reservationId,
+      referenceCode: result.code,
+      customerName: values.customerName,
+      customerWhatsapp: values.phone,
+      customerEmail: values.email,
+      celebrationDate: values.celebrationDate,
+      summaryLines: reservationSummaryLines(reservation),
+      normalizedPayload: { ...reservation },
+      reservation,
+    };
+
+    // El closure conserva el token solo en memoria. after() extiende la
+    // invocación serverless sin bloquear la respuesta del wizard.
+    deps.scheduleAfterFn(() =>
+      deps.processReservationLeadFn(leadInput, emailContext),
+    );
+
     return {
       ok: true,
       code: result.code,
@@ -310,6 +358,53 @@ export async function submitAgendaReservation(
   }
 
   return { ok: false, message: GENERIC_ERROR_MESSAGE };
+}
+
+function reservationLeadDetails(
+  values: {
+    celebrationDate: string;
+    guestCount: number;
+    flavor: string;
+    theme?: string;
+    designDescription: string;
+    fulfillmentType: "pickup" | "delivery";
+    deliveryDetails?: string;
+    hasReferenceImage: "yes" | "no";
+  },
+  classification: {
+    code: string;
+    status: "pending_deposit" | "human_review";
+    points: CapacityPoints;
+    reasons: string[];
+  },
+): ReservationLeadDetails {
+  return {
+    code: classification.code,
+    celebrationDate: values.celebrationDate,
+    status: classification.status,
+    capacityPoints: classification.points,
+    classificationReasons: classification.reasons,
+    guestCount: values.guestCount,
+    flavorLabel:
+      FORM_FLAVOR_OPTIONS.find((option) => option.value === values.flavor)?.label ??
+      values.flavor,
+    theme: values.theme,
+    designDescription: values.designDescription,
+    fulfillmentType: values.fulfillmentType,
+    deliveryDetails: values.deliveryDetails,
+    hasReferenceImage: values.hasReferenceImage === "yes",
+  };
+}
+
+function reservationSummaryLines(reservation: ReservationLeadDetails): string[] {
+  return [
+    `${reservation.guestCount} personas · ${reservation.flavorLabel}`,
+    reservation.theme ? `Temática: ${reservation.theme}` : "Sin temática indicada",
+    reservation.fulfillmentType === "delivery"
+      ? `Delivery: ${reservation.deliveryDetails}`
+      : "Retiro por el cliente",
+    `Diseño: ${reservation.designDescription}`,
+  ];
 }
 
 /**

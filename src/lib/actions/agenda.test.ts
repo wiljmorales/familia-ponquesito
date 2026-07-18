@@ -63,9 +63,15 @@ function deps(
       reservationId: "reservation-1",
       code: "FP-8-ABCD",
       status: "pending_deposit" as const,
+      capacityTotal: 4,
+      capacityUsed: 2,
       capacityRemaining: 2,
       manageToken: "token-privado",
     })),
+    scheduleAfterFn: vi.fn(),
+    processReservationLeadFn: vi.fn<AgendaActionDeps["processReservationLeadFn"]>(
+      async () => {},
+    ),
     ...overrides,
   };
 }
@@ -105,8 +111,15 @@ describe("fetchAgendaAvailability", () => {
 
 describe("submitAgendaReservation", () => {
   it("crea una reserva exitosa sin devolver el token al navegador", async () => {
-    const testDeps = deps();
-    const result = await submitAgendaReservation(VALID_RESERVATION, testDeps);
+    const scheduleAfterFn = vi.fn();
+    const processReservationLeadFn = vi.fn<
+      AgendaActionDeps["processReservationLeadFn"]
+    >(async () => {});
+    const testDeps = deps({ scheduleAfterFn, processReservationLeadFn });
+    const result = await submitAgendaReservation(
+      { ...VALID_RESERVATION, capacityRemaining: 999 },
+      testDeps,
+    );
 
     expect(result).toEqual({
       ok: true,
@@ -115,6 +128,25 @@ describe("submitAgendaReservation", () => {
       status: "pending_deposit",
     });
     expect(JSON.stringify(result)).not.toContain("token-privado");
+    expect(scheduleAfterFn).toHaveBeenCalledTimes(1);
+    expect(processReservationLeadFn).not.toHaveBeenCalled();
+
+    const task = scheduleAfterFn.mock.calls[0][0];
+    await task();
+    expect(processReservationLeadFn).toHaveBeenCalledTimes(1);
+    const [leadInput, emailContext] = processReservationLeadFn.mock.calls[0];
+    expect(emailContext.capacity).toEqual({
+      total: 4,
+      used: 2,
+      remaining: 2,
+      provisional: false,
+    });
+    expect(emailContext.manageUrl).toContain(
+      "/agenda/reservas/FP-8-ABCD?token=token-privado",
+    );
+    const persistible = JSON.stringify(leadInput);
+    expect(persistible).not.toContain("token-privado");
+    expect(persistible).not.toContain(emailContext.manageUrl);
   });
 
   it("recalcula puntos y estado aunque el cliente intente imponerlos", async () => {
@@ -123,6 +155,8 @@ describe("submitAgendaReservation", () => {
       reservationId: "reservation-1",
       code: "FP-8-ABCD",
       status: input.status,
+      capacityTotal: 4,
+      capacityUsed: 2,
       capacityRemaining: 2,
       manageToken: "token",
     }));
@@ -160,6 +194,7 @@ describe("submitAgendaReservation", () => {
     expect(result.ok).toBe(true);
     expect(testDeps.isReservationAllowedFn).not.toHaveBeenCalled();
     expect(testDeps.createReservationFn).not.toHaveBeenCalled();
+    expect(testDeps.scheduleAfterFn).not.toHaveBeenCalled();
   });
 
   it("devuelve un mensaje amable cuando el rate limit rechaza la solicitud", async () => {
@@ -179,6 +214,8 @@ describe("submitAgendaReservation", () => {
       reservationId: "reservation-human",
       code: "FP-8-HUMN",
       status: input.status,
+      capacityTotal: 4,
+      capacityUsed: 1,
       capacityRemaining: 4,
       manageToken: "token",
     }));
@@ -197,6 +234,16 @@ describe("submitAgendaReservation", () => {
     expect(result).toMatchObject({ ok: true, status: "human_review" });
     expect(createReservationFn).toHaveBeenCalledWith(
       expect.objectContaining({ status: "human_review", capacityPoints: 3 }),
+    );
+    const task = vi.mocked(testDeps.scheduleAfterFn).mock.calls[0][0];
+    await task();
+    expect(testDeps.processReservationLeadFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reservation: expect.objectContaining({ status: "human_review" }),
+      }),
+      expect.objectContaining({
+        capacity: expect.objectContaining({ provisional: true }),
+      }),
     );
   });
 
@@ -233,6 +280,7 @@ describe("submitAgendaReservation", () => {
       "2026-09-16",
       2,
     );
+    expect(testDeps.scheduleAfterFn).not.toHaveBeenCalled();
   });
 
   it("un fallo de servicio devuelve un error genérico sin detalles ni datos del cliente", async () => {
@@ -249,5 +297,6 @@ describe("submitAgendaReservation", () => {
     expect(serialized).not.toContain("ana@example.com");
     expect(serialized).not.toContain("Ana Pérez");
     expect(serialized).not.toContain("service_unavailable");
+    expect(testDeps.scheduleAfterFn).not.toHaveBeenCalled();
   });
 });

@@ -62,6 +62,8 @@ describe("createReservation", () => {
           reservation_id: "res-1",
           code: "FP-8-TEST",
           status: "pending_deposit",
+          capacity_total: 4,
+          capacity_used: 2,
           capacity_remaining: 2,
         },
       },
@@ -72,6 +74,8 @@ describe("createReservation", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.reservationId).toBe("res-1");
+      expect(result.capacityTotal).toBe(4);
+      expect(result.capacityUsed).toBe(2);
       expect(result.capacityRemaining).toBe(2);
       expect(result.status).toBe("pending_deposit");
       // El token en claro se devuelve al llamador; a la base de datos solo
@@ -105,6 +109,8 @@ describe("createReservation", () => {
           reservation_id: "res-2",
           code: "FP-8-OTRO",
           status: "pending_deposit",
+          capacity_total: 4,
+          capacity_used: 4,
           capacity_remaining: 0,
         },
       },

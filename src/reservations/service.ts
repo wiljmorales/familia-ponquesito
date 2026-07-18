@@ -63,6 +63,8 @@ export type CreateReservationResult =
       reservationId: string;
       code: string;
       status: InitialReservationStatus;
+      capacityTotal: number;
+      capacityUsed: number;
       capacityRemaining: number;
       /**
        * Token de gestión en claro. Solo debe usarse para armar el enlace
@@ -78,6 +80,8 @@ interface RpcSuccessPayload {
   reservation_id: string;
   code: string;
   status: ReservationStatus;
+  capacity_total?: number;
+  capacity_used?: number;
   capacity_remaining?: number;
   previous_date?: string;
   new_date?: string;
@@ -131,6 +135,8 @@ export async function createReservation(
         reservationId: payload.reservation_id,
         code: payload.code,
         status: input.status,
+        capacityTotal: payload.capacity_total ?? 0,
+        capacityUsed: payload.capacity_used ?? 0,
         capacityRemaining: payload.capacity_remaining ?? 0,
         manageToken: token,
       };

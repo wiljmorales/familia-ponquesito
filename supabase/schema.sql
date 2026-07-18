@@ -747,6 +747,9 @@ begin
     'reservation_id', v_reservation_id,
     'code', trim(p_code),
     'status', p_status,
+    'capacity_total', v_capacity_total,
+    'capacity_used',
+      case when v_consuming then v_used + p_capacity_points else v_used end,
     'capacity_remaining',
       case when v_consuming
         then greatest(v_capacity_total - v_used - p_capacity_points, 0)

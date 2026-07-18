@@ -112,4 +112,10 @@ describe("alineación supabase/schema.sql ↔ constantes TypeScript", () => {
     expect(reto8).toContain("on public.reservation_events (reservation_id, dedupe_key)");
     expect(reto8).toContain("where dedupe_key is not null");
   });
+
+  it("reserve_production_slot devuelve la fotografía transaccional de capacidad", () => {
+    expect(reto8).toContain("'capacity_total', v_capacity_total");
+    expect(reto8).toContain("'capacity_used',");
+    expect(reto8).toContain("'capacity_remaining',");
+  });
 });
