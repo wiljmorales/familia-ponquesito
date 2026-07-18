@@ -272,6 +272,8 @@ export function LatestReport({ report }: { report: LatestReportRow }) {
               <ul className="mt-2 space-y-1 text-sm text-text-secondary">
                 <li>Formulario de la landing: {metrics.leads.bySource.cake_request}</li>
                 <li>Juego Crea tu torta: {metrics.leads.bySource.cake_design}</li>
+                {/* ?? 0: reportes previos al Reto 7 no traen esta fuente en su jsonb. */}
+                <li>Agente de Atención: {metrics.leads.bySource.agent_message ?? 0}</li>
               </ul>
             </div>
             <div className="rounded-2xl border border-border-soft bg-cream-light p-4">

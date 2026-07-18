@@ -43,7 +43,7 @@ describe("computeWeeklyMetrics", () => {
 
     expect(metrics.leads.newInPeriod).toBe(0);
     expect(metrics.leads.totalAccumulated).toBe(0);
-    expect(metrics.leads.bySource).toEqual({ cake_request: 0, cake_design: 0 });
+    expect(metrics.leads.bySource).toEqual({ cake_request: 0, cake_design: 0, agent_message: 0 });
     expect(metrics.leads.byPriority).toEqual({ not_viable: 0, urgent: 0, high: 0, normal: 0 });
     expect(metrics.automation.emails).toEqual({
       attempted: 0,
@@ -70,7 +70,7 @@ describe("computeWeeklyMetrics", () => {
 
     expect(metrics.leads.newInPeriod).toBe(3);
     expect(metrics.leads.totalAccumulated).toBe(12);
-    expect(metrics.leads.bySource).toEqual({ cake_request: 2, cake_design: 1 });
+    expect(metrics.leads.bySource).toEqual({ cake_request: 2, cake_design: 1, agent_message: 0 });
     expect(metrics.leads.byPriority).toEqual({ not_viable: 0, urgent: 1, high: 1, normal: 1 });
     expect(metrics.alerts).not.toContain("Sin solicitudes nuevas esta semana.");
   });

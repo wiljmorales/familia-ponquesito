@@ -9,7 +9,7 @@ function metrics(overrides: Partial<WeeklyReportMetrics> = {}): WeeklyReportMetr
     leads: {
       newInPeriod: 3,
       totalAccumulated: 12,
-      bySource: { cake_request: 2, cake_design: 1 },
+      bySource: { cake_request: 2, cake_design: 1, agent_message: 0 },
       byPriority: { not_viable: 0, urgent: 1, high: 1, normal: 1 },
     },
     upcomingCelebrations: { next7Days: 2 },
@@ -117,7 +117,7 @@ describe("buildWeeklyReportEmail", () => {
         leads: {
           newInPeriod: 1,
           totalAccumulated: 1,
-          bySource: { cake_request: 1, cake_design: 0 },
+          bySource: { cake_request: 1, cake_design: 0, agent_message: 0 },
           byPriority: { not_viable: 1, urgent: 0, high: 0, normal: 0 },
         },
       }),

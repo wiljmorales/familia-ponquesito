@@ -1,8 +1,12 @@
-export type LeadSourceType = "cake_request" | "cake_design";
+/**
+ * "agent_message" (Reto 7): leads que nacen de un mensaje libre analizado
+ * por el Agente de Atención; la fila original vive en agent_decisions.
+ */
+export type LeadSourceType = "cake_request" | "cake_design" | "agent_message";
 
 export interface ProcessLeadInput {
   source: LeadSourceType;
-  /** id de la fila original en cake_requests o cake_designs. */
+  /** id de la fila original en cake_requests, cake_designs o agent_decisions. */
   sourceId: string;
   customerName: string;
   /** Ya normalizado a formato internacional (normalizeWhatsapp). */

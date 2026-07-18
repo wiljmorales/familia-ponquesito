@@ -269,3 +269,66 @@ create unique index if not exists weekly_reports_scheduled_period_key
 -- públicas. Solo service_role desde el servidor (cron/route handler y la
 -- página /reporte-semanal, que renderiza en servidor).
 alter table public.weekly_reports enable row level security;
+
+-- Familia Ponquesito — Reto 7: Agente de Atención Ponquesito
+--
+-- El agente recibe mensajes libres, decide una ruta y registra cada
+-- decisión en agent_decisions. Cuando la ruta es la máquina de leads
+-- (Reto 4), la fila de agent_decisions actúa como "fila original" del
+-- lead (source_type = 'agent_message'), igual que cake_requests y
+-- cake_designs lo hacen para los Retos 2 y 3. Ver docs/challenge-7.md.
+
+-- Amplía el check de origen de leads para aceptar al agente. Se recrea el
+-- constraint de forma idempotente; las filas existentes no se ven
+-- afectadas (los valores previos siguen siendo válidos).
+alter table public.leads drop constraint if exists leads_source_type_check;
+alter table public.leads add constraint leads_source_type_check
+  check (source_type in ('cake_request', 'cake_design', 'agent_message'));
+
+create table if not exists public.agent_decisions (
+  id uuid primary key default gen_random_uuid(),
+  -- Etiqueta de la fuente del mensaje. Las fuentes de la demo llevan
+  -- "(simulado)" de forma explícita; los mensajes escritos a mano llegan
+  -- como "Mensaje directo (demostración)".
+  source text not null,
+  -- id del caso de demostración precargado (ej. "caso-1"); null para
+  -- mensajes libres.
+  source_record_id text,
+  input_content text not null,
+  intent text not null check (intent in (
+    'new_order', 'general_question', 'missing_information',
+    'order_change_or_cancellation', 'sensitive_or_urgent_case'
+  )),
+  route text not null check (route in (
+    'lead_automation', 'knowledge_answer', 'request_information',
+    'order_review', 'human_escalation'
+  )),
+  urgency text not null check (urgency in ('low', 'normal', 'high', 'critical')),
+  confidence numeric not null check (confidence >= 0 and confidence <= 1),
+  requires_human boolean not null,
+  reason text not null,
+  missing_fields jsonb not null default '[]'::jsonb,
+  detected_order_code text,
+  recommended_action text not null,
+  -- null mientras status = 'processing' (la fila se inserta antes de
+  -- ejecutar la ruta, igual que weekly_reports en el Reto 6).
+  executed_action text,
+  guardrail_corrections jsonb not null default '[]'::jsonb,
+  decision_source text not null check (decision_source in ('gemini', 'fallback')),
+  status text not null default 'processing' check (status in (
+    'processing', 'lead_registered', 'answered', 'waiting_information',
+    'escalated_to_human', 'not_executed'
+  )),
+  created_at timestamptz not null default now()
+);
+
+comment on table public.agent_decisions is
+  'Decisiones del Agente de Atención Ponquesito (Reto 7): mensaje recibido, decisión estructurada (Gemini o fallback), correcciones de guardrails, ruta y acción ejecutada. Los datos de la demo están claramente marcados como simulados.';
+comment on column public.agent_decisions.decision_source is
+  'gemini = decisión del modelo validada; fallback = decisión determinista segura (el mensaje pasó a revisión humana).';
+comment on column public.agent_decisions.guardrail_corrections is
+  'Correcciones aplicadas por reglas deterministas del negocio sobre la decisión del modelo (lista de {rule, description}).';
+
+-- Mismo criterio de seguridad que el resto: RLS habilitado y SIN políticas
+-- públicas. Solo service_role desde el servidor (endpoint del agente).
+alter table public.agent_decisions enable row level security;

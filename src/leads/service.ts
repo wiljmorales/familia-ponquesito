@@ -20,6 +20,7 @@ const MAX_REFERENCE_CODE_ATTEMPTS = 5;
 const REFERENCE_CODE_PREFIX: Record<LeadSourceType, string> = {
   cake_request: "FP-2",
   cake_design: "FP-3",
+  agent_message: "FP-7",
 };
 
 type EventType = "lead_registered" | "customer_email" | "owner_email";

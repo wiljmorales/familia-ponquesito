@@ -205,6 +205,20 @@ export function applyBusinessGuardrails(
     });
   }
 
+  // 4b. La clasificación de prioridad del Reto 4 exige fecha de
+  // celebración: sin fecha no hay lead que registrar, se pide primero.
+  if (corrected.route === "lead_automation" && corrected.detectedCelebrationDate === null) {
+    corrected.route = "request_information";
+    if (!corrected.missingFields.includes("celebration_date")) {
+      corrected.missingFields.push("celebration_date");
+    }
+    corrections.push({
+      rule: "lead-sin-fecha",
+      description:
+        "El mensaje no permite fijar la fecha de la celebración: la máquina de leads la necesita para clasificar la prioridad, se solicita primero.",
+    });
+  }
+
   // 5. Anticipación mínima: pedidos con menos de 3 días (incluido el mismo
   // día) nunca entran solos a la máquina de leads; los decide Karem.
   if (

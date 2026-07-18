@@ -268,7 +268,7 @@ describe("generateWeeklyReport", () => {
 
     const metrics = row.metrics as WeeklyReportMetrics;
     expect(metrics.leads.newInPeriod).toBe(3);
-    expect(metrics.leads.bySource).toEqual({ cake_request: 2, cake_design: 1 });
+    expect(metrics.leads.bySource).toEqual({ cake_request: 2, cake_design: 1, agent_message: 0 });
     expect(metrics.leads.byPriority).toEqual({ not_viable: 0, urgent: 1, high: 1, normal: 1 });
     // error + success del mismo correo = UN envío exitoso.
     expect(metrics.automation.emails).toEqual({

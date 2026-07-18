@@ -14,6 +14,7 @@ export interface WeeklyReportEmailInput {
 const SOURCE_LABEL: Record<LeadSourceType, string> = {
   cake_request: "Formulario de la landing",
   cake_design: "Juego Crea tu torta",
+  agent_message: "Agente de Atención (Reto 7)",
 };
 
 const PRIORITY_LABEL: Record<LeadPriority, string> = {
