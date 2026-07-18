@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import type { GenerateWeeklyReportResult } from "@/reports/service";
-import { handleWeeklyReportRequest } from "./route";
+import { handleWeeklyReportRequest } from "./handler";
 
 const SECRET = "secreto-de-prueba-cron";
 
