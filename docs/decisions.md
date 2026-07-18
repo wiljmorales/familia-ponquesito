@@ -421,3 +421,53 @@ incluyendo la combinación exacta reportada.
   una corrida manual, siempre permitida), sin paginación sobre el límite
   de 1000 filas de Supabase, y ventana de ±1 hora del cron en Vercel
   Hobby sin reintentos automáticos.
+
+## 2026-07-17 — Reto 7: Agente de Atención Ponquesito (etapas 1–4)
+
+- **Rama**: `reto-7/agente-de-atencion`, desde `main`.
+- **Arquitectura en 5 piezas** (`src/agent/`): interpretación con IA
+  (`analyze.ts`), guardrails deterministas (`guardrails.ts`), router,
+  ejecutores y orquestador/registro. La IA solo interpreta lenguaje; toda
+  política del negocio vive en código y prevalece sobre el modelo, con
+  cada corrección registrada y visible en la demo.
+- **`processLead()` del Reto 4 se reutiliza tal cual** (decisión aprobada
+  por el dueño del proyecto): el check de `leads.source_type` se amplió de
+  forma aditiva e idempotente con `'agent_message'` y la fila de
+  `agent_decisions` actúa como fila original del lead (prefijo `FP-7`).
+  Consecuencia aceptada: procesar el caso 1 de la demo dispara los correos
+  reales de la automatización, con datos demo claramente marcados y el
+  correo del "cliente" apuntando a una casilla del negocio
+  (`AGENT_DEMO_CUSTOMER_EMAIL` o `KAREM_NOTIFICATION_EMAIL`), nunca a un
+  tercero. El registro del lead se verifica consultando la tabla; jamás se
+  afirma sin confirmar.
+- **Esquema cerrado con Zod** (herramienta ya presente por los Retos 2/3)
+  en vez de los validadores manuales de los Retos 1/6: coherencia
+  intención↔ruta↔`requiresHuman` con `superRefine`. Criterio
+  anti-invención: código de pedido y fecha con formato inválido se
+  normalizan a `null` (los guardrails los re-derivan por regex del
+  mensaje); las incoherencias estructurales invalidan la decisión entera y
+  disparan el fallback.
+- **`detectedCelebrationDate` se añadió al contrato** (no estaba en la
+  propuesta del enunciado): los guardrails de anticipación mínima
+  necesitan la fecha absoluta para aplicarse de forma determinista.
+- **Fallback = caso sensible**: un mensaje que la IA no pudo interpretar
+  se clasifica como "situación ambigua con riesgo" (intención sensible,
+  revisión humana, `decision_source = 'fallback'`), sin perder el mensaje
+  ni ejecutar acciones automáticas.
+- **Los casos demo se procesan por id** y el servidor usa siempre el
+  mensaje canónico del caso: la etiqueta "caso N" nunca puede llevar texto
+  inyectado por el cliente. El contacto simulado se resuelve solo en
+  servidor (no viaja al bundle).
+- **Métricas del Reto 6 ampliadas** con la fuente `agent_message` (el
+  reporte semanal cuenta los leads del agente); reportes previos sin esa
+  clave en su jsonb se muestran con `?? 0`.
+- **Demo**: sessionStorage versionado (patrón real del Reto 5, aunque el
+  enunciado decía localStorage), hidratación con `useReducer` tras el
+  montaje, contadores derivados del estado real, reinicio con
+  confirmación. Rate limiting 10/min reutilizando el limitador del Reto 1.
+- **Verificado en vivo con Gemini real**: cinco casos → cinco rutas
+  distintas; guardrail de discrepancia de fechas en el caso 4; mensaje
+  libre con intención de compra sin contacto redirigido a pedir datos;
+  sin `agent_decisions` en Supabase la demo degrada honestamente (sin
+  correos). Pendiente: aplicar `supabase/schema.sql` en el SQL Editor del
+  proyecto real y verificar el caso 1 completo.
