@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Playfair_Display, Sacramento } from "next/font/google";
 import "./globals.css";
+import { SITE_URL } from "@/lib/site-url";
 
 const playfair = Playfair_Display({
   variable: "--font-playfair",
@@ -19,7 +20,6 @@ const sacramento = Sacramento({
   weight: "400",
 });
 
-const SITE_URL = "https://familia-ponquesito.vercel.app";
 const TITLE = "Tortas personalizadas en Barquisimeto | Familia Ponquesito";
 const DESCRIPTION =
   "Tortas personalizadas para cumpleaños y celebraciones en Barquisimeto. Diseños hechos con amor, sabores para elegir y atención personalizada.";
