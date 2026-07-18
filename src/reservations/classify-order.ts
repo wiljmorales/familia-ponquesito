@@ -68,6 +68,24 @@ const STRUCTURAL_SIGNAL_PATTERNS: { pattern: RegExp; label: string }[] = [
   },
 ];
 
+/**
+ * Comportamiento de human_required en el wizard (decisión del checkpoint
+ * previo a la Etapa 3): el cliente SÍ ve el calendario y elige su fecha
+ * preferida, pero la disponibilidad se consulta de forma provisional con
+ * la carga máxima modelada (3 puntos) y solo se recomiendan fechas que
+ * podrían soportarla. Al enviar, la solicitud nace en estado
+ * human_review, NO consume capacidad y la interfaz nunca presenta la
+ * fecha como apartada (prohibido "último cupo" / "fecha reservada"; el
+ * mensaje al cliente es HUMAN_REVIEW_DATE_NOTICE).
+ */
+export const HUMAN_REVIEW_PROVISIONAL_POINTS = COMPLEX_CAKE_POINTS;
+
+/** Mensaje principal que ve el cliente cuando su diseño requiere revisión. */
+export const HUMAN_REVIEW_DATE_NOTICE =
+  "Tu diseño necesita una revisión personalizada. Puedes indicarnos la fecha " +
+  "que prefieres, pero todavía no quedará reservada. Familia Ponquesito " +
+  "revisará el pedido y se comunicará contigo para confirmar disponibilidad.";
+
 export function classifyOrder(input: OrderClassificationInput): OrderClassification {
   if (input.tiers === "two_or_more") {
     return {
@@ -86,7 +104,7 @@ export function classifyOrder(input: OrderClassificationInput): OrderClassificat
     return {
       kind: "human_required",
       reasons: structuralSignals.map(({ label }) => label),
-      estimatedPoints: COMPLEX_CAKE_POINTS,
+      estimatedPoints: HUMAN_REVIEW_PROVISIONAL_POINTS,
     };
   }
 

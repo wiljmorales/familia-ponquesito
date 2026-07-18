@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { classifyOrder, type OrderClassificationInput } from "./classify-order";
+import { COMPLEX_CAKE_POINTS } from "./capacity";
+import {
+  classifyOrder,
+  HUMAN_REVIEW_DATE_NOTICE,
+  HUMAN_REVIEW_PROVISIONAL_POINTS,
+  type OrderClassificationInput,
+} from "./classify-order";
 
 function baseInput(overrides: Partial<OrderClassificationInput> = {}): OrderClassificationInput {
   return {
@@ -74,5 +80,25 @@ describe("classifyOrder", () => {
   it("la clasificación es determinística: misma entrada, mismo resultado", () => {
     const input = baseInput({ isCustomDesign: true, guestCount: 55 });
     expect(classifyOrder(input)).toEqual(classifyOrder(input));
+  });
+});
+
+describe("regla de human_review para el wizard (decisión del checkpoint)", () => {
+  it("la disponibilidad provisional se consulta con la carga máxima modelada", () => {
+    expect(HUMAN_REVIEW_PROVISIONAL_POINTS).toBe(COMPLEX_CAKE_POINTS);
+    const result = classifyOrder(
+      baseInput({ designDescription: "Torta antigravedad con fuente de chocolate" }),
+    );
+    expect(result.kind).toBe("human_required");
+    if (result.kind === "human_required") {
+      expect(result.estimatedPoints).toBe(HUMAN_REVIEW_PROVISIONAL_POINTS);
+    }
+  });
+
+  it("el mensaje al cliente deja claro que la fecha aún NO queda reservada", () => {
+    expect(HUMAN_REVIEW_DATE_NOTICE).toContain("todavía no quedará reservada");
+    expect(HUMAN_REVIEW_DATE_NOTICE).toContain("revisión personalizada");
+    // Nunca lenguaje de reserva efectiva.
+    expect(HUMAN_REVIEW_DATE_NOTICE).not.toMatch(/último cupo|fecha reservada|apartad/i);
   });
 });
