@@ -34,7 +34,12 @@ export interface ComputeMetricsInput {
  * vive aquí para poder probarse sin Supabase.
  */
 export function computeWeeklyMetrics(input: ComputeMetricsInput): WeeklyReportMetrics {
-  const bySource = { cake_request: 0, cake_design: 0, agent_message: 0 };
+  const bySource = {
+    cake_request: 0,
+    cake_design: 0,
+    agent_message: 0,
+    cake_reservation: 0,
+  };
   const byPriority = { not_viable: 0, urgent: 0, high: 0, normal: 0 };
 
   for (const lead of input.leadsInPeriod) {

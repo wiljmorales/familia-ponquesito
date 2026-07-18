@@ -15,6 +15,7 @@ const SOURCE_LABEL: Record<LeadSourceType, string> = {
   cake_request: "Formulario de la landing",
   cake_design: "Juego Crea tu torta",
   agent_message: "Agente de Atención (Reto 7)",
+  cake_reservation: "Agenda Ponquesito (Reto 8)",
 };
 
 const PRIORITY_LABEL: Record<LeadPriority, string> = {

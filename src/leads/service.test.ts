@@ -279,4 +279,19 @@ describe("processLead", () => {
 
     expect(leads.rows[0].reference_code).toBe("FP-3-A7K2");
   });
+
+  it("usa el prefijo FP-8 para un lead de reserva sin código preasignado", async () => {
+    const { supabase, leads } = createFakeSupabase();
+    const { client } = createFakeEmailClient([
+      { ok: true, providerId: "a" },
+      { ok: true, providerId: "b" },
+    ]);
+
+    await processLead(
+      { ...BASE_INPUT, source: "cake_reservation", sourceId: "reservation-1" },
+      { supabase, emailClient: client, karemEmail: "karem@example.com" },
+    );
+
+    expect(leads.rows[0].reference_code).toMatch(/^FP-8-/);
+  });
 });

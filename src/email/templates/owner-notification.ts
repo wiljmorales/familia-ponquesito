@@ -22,6 +22,8 @@ const SOURCE_LABEL: Record<LeadSourceType, string> = {
   cake_request: "Solicitud de cotización (formulario)",
   cake_design: "Crea tu torta (juego)",
   agent_message: "Agente de Atención (mensaje libre)",
+  // processLead selecciona la plantilla específica antes de llegar aquí.
+  cake_reservation: "Agenda Ponquesito (reserva)",
 };
 
 const PRIORITY_LABEL: Record<LeadPriority, string> = {

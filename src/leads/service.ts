@@ -21,6 +21,7 @@ const REFERENCE_CODE_PREFIX: Record<LeadSourceType, string> = {
   cake_request: "FP-2",
   cake_design: "FP-3",
   agent_message: "FP-7",
+  cake_reservation: "FP-8",
 };
 
 type EventType = "lead_registered" | "customer_email" | "owner_email";

@@ -16,6 +16,8 @@ const INTRO_BY_SOURCE: Record<LeadSourceType, string> = {
   cake_design: "Recibimos el diseño de tu torta y ya está en manos de Familia Ponquesito.",
   cake_request: "Recibimos tu solicitud de cotización.",
   agent_message: "Recibimos tu mensaje y tu solicitud ya está en manos de Familia Ponquesito.",
+  // processLead selecciona la plantilla específica antes de llegar aquí.
+  cake_reservation: "Recibimos tu solicitud en la Agenda Ponquesito.",
 };
 
 /**
