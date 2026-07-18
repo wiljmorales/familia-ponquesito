@@ -249,6 +249,21 @@ export default function AgendaWizard() {
     [orderRaw, loadAvailability],
   );
 
+  const applyConflictAlternative = useCallback(
+    (date: string) => {
+      setSelectedDate(date);
+      setNearbyForDate(null);
+      setSubmitError(null);
+      const month = monthOfISO(date);
+      setMonthISO(month);
+      // Una fecha distinta nunca se confirma silenciosamente desde el paso
+      // de datos: el cliente vuelve al calendario y debe pulsar Continuar.
+      setStep(1);
+      if (orderRaw) void loadAvailability(orderRaw, month);
+    },
+    [orderRaw, loadAvailability],
+  );
+
   async function handleContactSubmit() {
     if (submitting || !orderRaw || !selectedDate) return;
     setSubmitting(true);
@@ -289,6 +304,7 @@ export default function AgendaWizard() {
   }
 
   const selectedDay = selectedDate ? daysByDate[selectedDate] : undefined;
+  const hasSelectableDays = Object.values(daysByDate).some((day) => day.canAccept);
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-8 sm:px-6 sm:py-12">
@@ -552,6 +568,30 @@ export default function AgendaWizard() {
               </div>
             )}
 
+            {!loadingDays && !availabilityError && !hasSelectableDays && (
+              <div
+                role="status"
+                className="rounded-2xl border border-gold/50 bg-yellow/10 px-4 py-3 text-sm leading-relaxed text-cocoa"
+              >
+                <p className="font-medium">
+                  No hay fechas disponibles este mes para este tipo de torta.
+                </p>
+                <p className="mt-1 text-text-secondary">
+                  {previewHumanReview || humanReview
+                    ? "Como la recomendación provisional usa la carga máxima, solo puedes enviar una fecha preferida cuando aparezca un día seleccionable."
+                    : "Puedes revisar otro mes o volver al paso anterior para simplificar el diseño."}
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setStep(0)}
+                  className="mt-3 !px-4 !py-1.5 text-xs"
+                >
+                  Simplificar mi diseño
+                </Button>
+              </div>
+            )}
+
             {selectedDate && selectedDay?.canAccept && (
               <div className="flex items-start gap-2.5 rounded-2xl border border-terracotta/40 bg-terracotta/5 px-4 py-3 text-sm text-cocoa">
                 <CalendarHeart aria-hidden className="mt-0.5 size-4 shrink-0 text-terracotta" />
@@ -712,7 +752,7 @@ export default function AgendaWizard() {
                       <button
                         key={option.date}
                         type="button"
-                        onClick={() => applyAlternative(option.date)}
+                        onClick={() => applyConflictAlternative(option.date)}
                         className="rounded-full border border-red-300 bg-white px-3 py-1 text-xs text-red-800 transition-colors hover:border-red-500"
                       >
                         {formatDateEs(option.date)}

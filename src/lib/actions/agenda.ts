@@ -1,8 +1,10 @@
 "use server";
 
+import { headers } from "next/headers";
 import { addDaysISO, businessTodayISO } from "@/lib/business-dates";
 import { generateReferenceCode } from "@/lib/reference-code";
 import { MIN_LEAD_DAYS } from "@/lib/constants/business";
+import { createRateLimiter } from "@/app/api/assistant/rate-limit";
 import {
   agendaOrderSchema,
   agendaReservationSchema,
@@ -15,7 +17,13 @@ import {
 } from "@/reservations/classify-order";
 import { findNearbyAlternatives, toDayAvailability } from "@/reservations/availability";
 import { monthDateRange } from "@/reservations/calendar";
-import { createReservation, getAvailability } from "@/reservations/service";
+import {
+  createReservation,
+  getAvailability,
+  type CreateReservationInput,
+  type CreateReservationResult,
+  type GetAvailabilityResult,
+} from "@/reservations/service";
 import type { DayAvailability } from "@/reservations/types";
 
 /**
@@ -32,6 +40,61 @@ import type { DayAvailability } from "@/reservations/types";
 
 const GENERIC_ERROR_MESSAGE =
   "No pudimos consultar la agenda en este momento. Inténtalo de nuevo en unos minutos.";
+const RATE_LIMIT_MESSAGE =
+  "Recibimos varias solicitudes desde tu conexión. Espera unos minutos antes de intentarlo de nuevo.";
+
+/**
+ * Protección básica contra automatización abusiva. En Vercel serverless la
+ * memoria no se comparte entre instancias ni regiones, por lo que este límite
+ * es una barrera de bajo costo, no una cuota global estricta.
+ */
+const isReservationAllowedForKey = createRateLimiter({
+  limit: 5,
+  windowMs: 15 * 60_000,
+});
+
+export interface AgendaActionDeps {
+  getAvailabilityFn: (
+    startDate: string,
+    endDate: string,
+    capacityPoints: CapacityPoints,
+  ) => Promise<GetAvailabilityResult>;
+  createReservationFn: (
+    input: CreateReservationInput,
+  ) => Promise<CreateReservationResult>;
+  businessTodayISOFn: () => string;
+  isReservationAllowedFn: () => Promise<boolean>;
+}
+
+async function defaultReservationAllowed(): Promise<boolean> {
+  const requestHeaders = await headers();
+  // Vercel normaliza x-forwarded-for en el borde. Solo se consulta aquí,
+  // dentro del servidor; el navegador nunca proporciona una "IP" como dato
+  // del formulario ni participa en la decisión del limitador.
+  const key =
+    requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    requestHeaders.get("x-real-ip")?.trim() ||
+    "unknown";
+  return isReservationAllowedForKey(key);
+}
+
+const DEFAULT_DEPS: AgendaActionDeps = {
+  getAvailabilityFn: getAvailability,
+  createReservationFn: createReservation,
+  businessTodayISOFn: businessTodayISO,
+  isReservationAllowedFn: defaultReservationAllowed,
+};
+
+/**
+ * El segundo argumento existe únicamente para pruebas unitarias en Node.
+ * En producción se ignora por completo: un cliente de la Server Action no
+ * puede sustituir servicios, reloj ni rate limiter.
+ */
+function actionDeps(overrides?: Partial<AgendaActionDeps>): AgendaActionDeps {
+  return process.env.NODE_ENV === "test"
+    ? { ...DEFAULT_DEPS, ...overrides }
+    : DEFAULT_DEPS;
+}
 
 interface ClassifiedOrder {
   input: OrderClassificationInput;
@@ -91,7 +154,9 @@ export type AgendaAvailabilityResult =
 export async function fetchAgendaAvailability(
   rawOrder: unknown,
   monthISO: string,
+  testDeps?: Partial<AgendaActionDeps>,
 ): Promise<AgendaAvailabilityResult> {
+  const deps = actionDeps(testDeps);
   if (typeof monthISO !== "string" || !/^\d{4}-\d{2}$/.test(monthISO)) {
     return { ok: false, message: GENERIC_ERROR_MESSAGE };
   }
@@ -102,7 +167,7 @@ export async function fetchAgendaAvailability(
   }
 
   const { humanReview, points } = classifyFromValues(parsedOrder.data);
-  const todayISO = businessTodayISO();
+  const todayISO = deps.businessTodayISOFn();
   const { startISO, endISO } = monthDateRange(monthISO);
 
   // Los días pasados no se consultan (la cuadrícula los pinta apagados);
@@ -113,7 +178,7 @@ export async function fetchAgendaAvailability(
     return { ok: true, todayISO, humanReview, days: [] };
   }
 
-  const result = await getAvailability(queryStart, endISO, points);
+  const result = await deps.getAvailabilityFn(queryStart, endISO, points);
   if (!result.ok) {
     return { ok: false, message: GENERIC_ERROR_MESSAGE };
   }
@@ -156,7 +221,9 @@ const DATE_ERROR_MESSAGES: Record<string, string> = {
 
 export async function submitAgendaReservation(
   raw: unknown,
+  testDeps?: Partial<AgendaActionDeps>,
 ): Promise<SubmitAgendaReservationResult> {
+  const deps = actionDeps(testDeps);
   // Campo trampa para spam: se responde como si todo hubiera salido bien,
   // sin escribir nada (el código mostrado no corresponde a ninguna reserva).
   const honeypot =
@@ -167,9 +234,13 @@ export async function submitAgendaReservation(
     return {
       ok: true,
       code: generateReferenceCode("FP-8"),
-      celebrationDate: businessTodayISO(),
+      celebrationDate: deps.businessTodayISOFn(),
       status: "pending_deposit",
     };
+  }
+
+  if (!(await deps.isReservationAllowedFn())) {
+    return { ok: false, message: RATE_LIMIT_MESSAGE };
   }
 
   const parsed = agendaReservationSchema.safeParse(raw);
@@ -192,7 +263,7 @@ export async function submitAgendaReservation(
   const { input, humanReview, points, reasons } = classifyFromValues(values);
   const status = humanReview ? "human_review" : "pending_deposit";
 
-  const result = await createReservation({
+  const result = await deps.createReservationFn({
     celebrationDate: values.celebrationDate,
     capacityPoints: points,
     status,
@@ -234,7 +305,7 @@ export async function submitAgendaReservation(
     return {
       ok: false,
       message: dateErrorMessage,
-      alternatives: await findAlternativesFor(values.celebrationDate, points),
+      alternatives: await findAlternativesFor(values.celebrationDate, points, deps),
     };
   }
 
@@ -249,9 +320,10 @@ export async function submitAgendaReservation(
 async function findAlternativesFor(
   requestedDateISO: string,
   points: CapacityPoints,
+  deps: AgendaActionDeps,
 ): Promise<{ date: string; isLastSlot: boolean }[]> {
-  const todayISO = businessTodayISO();
-  const result = await getAvailability(
+  const todayISO = deps.businessTodayISOFn();
+  const result = await deps.getAvailabilityFn(
     addDaysISO(todayISO, MIN_LEAD_DAYS),
     addDaysISO(todayISO, BOOKING_WINDOW_DAYS),
     points,
