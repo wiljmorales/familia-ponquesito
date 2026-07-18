@@ -187,3 +187,56 @@ Limitaciones conocidas:
 - El rate limit en memoria no es global entre instancias serverless.
 - La evidencia y URL pública se registran solo después de una Preview exitosa;
   no se inventan antes del despliegue.
+
+## Verificación E2E real — 18 de julio de 2026
+
+La Preview de la rama se verificó contra el Supabase real con datos
+inequívocamente marcados como “Cliente de demostración — Reto 8”. El escenario
+usó el 1 de septiembre de 2026 con capacidad `3/2/1`. La reserva sencilla tomó
+el último punto y produjo el código `FP-8-FX••`, estado
+`pending_deposit` y capacidad `3/3/0`, sin presentar el pedido como confirmado.
+
+La ejecución real utilizó 10 personas, retiro y la descripción “Verificación
+E2E de Agenda Ponquesito”. Aunque el plan indicaba Vainilla y una temática
+explícita, en el formulario probado se seleccionó Chocolate y la temática quedó
+vacía. Se conserva esta diferencia en el registro para no inventar evidencia.
+
+Llegaron dos mensajes independientes a la bandeja autorizada:
+
+- **Cliente:** “Recibimos tu reserva FP-8-FXHH — Familia Ponquesito”. Incluyó
+  código, fecha, resumen, anticipo del 50 %, próximos pasos y enlace privado.
+  Indicó expresamente que el pedido todavía no estaba confirmado.
+- **Interno:** “Reserva FP-8-FXHH — Agenda Ponquesito”. Incluyó cliente,
+  WhatsApp, correo, fecha, 1 punto estimado, capacidad restante 0 de 3,
+  entrega, descripción y clasificación. No incluyó enlace privado, token ni
+  hash.
+
+El enlace privado abrió la reserva correcta en `pending_deposit`. Un token
+deliberadamente alterado mostró la misma experiencia genérica que un código
+inexistente. El token no fue copiado a documentación, capturas versionadas ni
+logs.
+
+La reserva se reprogramó al 2 de septiembre de 2026 y luego se canceló desde la
+interfaz con confirmaciones explícitas. La página refrescó la fecha
+autoritativa, terminó en `cancelled`, mostró `cancelled_at` en base de datos y
+retiró todas las acciones. La fecha original volvió a `3/2/1`; la fecha nueva
+quedó `4/0/4` después de cancelar.
+
+La auditoría confirmó:
+
+- una reserva y un lead `cake_reservation` con el mismo código y `source_id`;
+- `lead_registered`, `customer_email` y `owner_email` exitosos una sola vez;
+- eventos `created`, `lead_registered`, dos `email_sent`, `rescheduled` y
+  `cancelled`;
+- un reintento de `processReservationLead()` conservó un solo lead y tres
+  acciones exitosas, sin reenviar correos;
+- ausencia de token, URL privada y credenciales en `order_details`,
+  `normalized_payload`, eventos, errores persistidos y correo interno.
+
+No se enviaron correos al reprogramar ni cancelar: es el comportamiento
+deliberado del MVP. Esas operaciones solo registran eventos y no reutilizan
+`processLead()`.
+
+Finalmente se eliminaron exclusivamente la reserva E2E, su lead y eventos
+dependientes, la semilla `FP-8-DEMO` y el override marcado. La comprobación
+posterior devolvió cero reservas, cero leads y cero overrides del escenario.
