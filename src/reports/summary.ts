@@ -21,10 +21,14 @@ export interface SummaryResult {
 /** Contrato inyectable en el servicio del reporte (pruebas sin red). */
 export type SummaryGenerator = (metrics: WeeklyReportMetrics) => Promise<SummaryResult>;
 
-const SOURCE_LABEL: Record<"cake_request" | "cake_design" | "agent_message", string> = {
+const SOURCE_LABEL: Record<
+  "cake_request" | "cake_design" | "agent_message" | "cake_reservation",
+  string
+> = {
   cake_request: "del formulario de la landing",
   cake_design: "del juego Crea tu torta",
   agent_message: "del Agente de Atención",
+  cake_reservation: "de Agenda Ponquesito",
 };
 
 /**

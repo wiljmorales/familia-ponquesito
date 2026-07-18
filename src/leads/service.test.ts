@@ -5,9 +5,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // bundler que distinga cliente/servidor, así que se neutraliza aquí.
 vi.mock("server-only", () => ({}));
 
-import { processLead } from "./service";
+import { processLead, processReservationLead } from "./service";
 import type { EmailClient, SendEmailResult } from "@/email/client";
 import type { ProcessLeadInput } from "./types";
+import type { ReservationEmailContext } from "@/email/templates/reservation-types";
 
 /**
  * Fake mínimo de Supabase, suficiente para los patrones de consulta que usa
@@ -25,11 +26,18 @@ class FakeTable {
   private nextId = 1;
 
   constructor(
-    private readonly uniqueConstraints: { name: string; columns: string[] }[] = [],
+    private readonly uniqueConstraints: {
+      name: string;
+      columns: string[];
+      whenNotNull?: string;
+    }[] = [],
   ) {}
 
   insert(row: Record<string, unknown>): { data: FakeRow | null; error: { code: string; message: string } | null } {
     for (const constraint of this.uniqueConstraints) {
+      if (constraint.whenNotNull && row[constraint.whenNotNull] == null) {
+        continue;
+      }
       const clashes = this.rows.some((existing) =>
         constraint.columns.every((col) => existing[col] === row[col]),
       );
@@ -107,10 +115,18 @@ function createFakeSupabase() {
     { name: "leads_reference_code_key", columns: ["reference_code"] },
   ]);
   const events = new FakeTable();
+  const reservationEvents = new FakeTable([
+    {
+      name: "reservation_events_dedupe_idx",
+      columns: ["reservation_id", "dedupe_key"],
+      whenNotNull: "dedupe_key",
+    },
+  ]);
 
   const tables: Record<string, FakeTable> = {
     leads,
     lead_automation_events: events,
+    reservation_events: reservationEvents,
   };
 
   const supabase = {
@@ -119,7 +135,12 @@ function createFakeSupabase() {
     },
   };
 
-  return { supabase: supabase as unknown as SupabaseClient, leads, events };
+  return {
+    supabase: supabase as unknown as SupabaseClient,
+    leads,
+    events,
+    reservationEvents,
+  };
 }
 
 function createFakeEmailClient(results: SendEmailResult[]) {
@@ -140,6 +161,38 @@ const BASE_INPUT: ProcessLeadInput = {
   celebrationDate: "2026-03-01",
   summaryLines: ["Celebración: Cumpleaños"],
   normalizedPayload: { celebrationType: "cumpleanos" },
+};
+
+const RESERVATION_INPUT = {
+  ...BASE_INPUT,
+  source: "cake_reservation" as const,
+  sourceId: "reservation-1",
+  referenceCode: "FP-8-ABCD",
+  celebrationDate: "2026-08-15",
+  normalizedPayload: {
+    code: "FP-8-ABCD",
+    celebrationDate: "2026-08-15",
+    status: "pending_deposit",
+  },
+  reservation: {
+    code: "FP-8-ABCD",
+    celebrationDate: "2026-08-15",
+    status: "pending_deposit" as const,
+    capacityPoints: 2 as const,
+    classificationReasons: ["Decoración personalizada."],
+    guestCount: 20,
+    flavorLabel: "Chocolate",
+    theme: "Flores",
+    designDescription: "Torta floral",
+    fulfillmentType: "pickup" as const,
+    hasReferenceImage: false,
+  },
+};
+
+const RESERVATION_EMAIL_CONTEXT: ReservationEmailContext = {
+  manageUrl:
+    "https://familia-ponquesito.vercel.app/agenda/reservas/FP-8-ABCD?token=token-claro",
+  capacity: { total: 4, used: 2, remaining: 2, provisional: false },
 };
 
 describe("processLead", () => {
@@ -278,5 +331,149 @@ describe("processLead", () => {
     );
 
     expect(leads.rows[0].reference_code).toBe("FP-3-A7K2");
+  });
+
+  it("reutiliza el código FP-8 real y selecciona las plantillas de reserva", async () => {
+    const { supabase, leads } = createFakeSupabase();
+    const { client } = createFakeEmailClient([
+      { ok: true, providerId: "a" },
+      { ok: true, providerId: "b" },
+    ]);
+
+    await processReservationLead(
+      RESERVATION_INPUT,
+      RESERVATION_EMAIL_CONTEXT,
+      { supabase, emailClient: client, karemEmail: "karem@example.com" },
+    );
+
+    expect(leads.rows[0].reference_code).toBe("FP-8-ABCD");
+  });
+
+  it("proyecta eventos terminales idempotentes y no reenvía correos exitosos", async () => {
+    const { supabase, reservationEvents } = createFakeSupabase();
+    const { client, send } = createFakeEmailClient([
+      { ok: true, providerId: "customer-provider" },
+      { ok: true, providerId: "owner-provider" },
+    ]);
+    const options = { supabase, emailClient: client, karemEmail: "karem@example.com" };
+
+    await processReservationLead(RESERVATION_INPUT, RESERVATION_EMAIL_CONTEXT, options);
+    await processReservationLead(RESERVATION_INPUT, RESERVATION_EMAIL_CONTEXT, options);
+
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(reservationEvents.rows.map((row) => row.dedupe_key).sort()).toEqual([
+      "customer_email_sent",
+      "lead_registered",
+      "owner_email_sent",
+    ]);
+  });
+
+  it("un fallo del cliente no impide el correo interno y puede reintentarse", async () => {
+    const { supabase, reservationEvents } = createFakeSupabase();
+    const { client, send } = createFakeEmailClient([
+      { ok: false, error: "fallo cliente" },
+      { ok: false, error: "fallo cliente" },
+      { ok: true, providerId: "owner-provider" },
+    ]);
+    const options = { supabase, emailClient: client, karemEmail: "karem@example.com" };
+
+    await processReservationLead(RESERVATION_INPUT, RESERVATION_EMAIL_CONTEXT, options);
+
+    expect(send).toHaveBeenCalledTimes(3);
+    expect(
+      reservationEvents.rows.some(
+        (row) =>
+          row.event_type === "email_failed" &&
+          (row.metadata as Record<string, unknown>).recipient === "customer" &&
+          row.dedupe_key == null,
+      ),
+    ).toBe(true);
+    expect(
+      reservationEvents.rows.some((row) => row.dedupe_key === "owner_email_sent"),
+    ).toBe(true);
+
+    send.mockReset();
+    send.mockResolvedValueOnce({ ok: true, providerId: "customer-provider" });
+    await processReservationLead(RESERVATION_INPUT, RESERVATION_EMAIL_CONTEXT, options);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(
+      reservationEvents.rows.some((row) => row.dedupe_key === "customer_email_sent"),
+    ).toBe(true);
+  });
+
+  it("un fallo del correo interno no revierte ni reenvía el correo del cliente", async () => {
+    const { supabase, reservationEvents } = createFakeSupabase();
+    const { client, send } = createFakeEmailClient([
+      { ok: true, providerId: "customer-provider" },
+      { ok: false, error: "fallo owner" },
+      { ok: false, error: "fallo owner" },
+    ]);
+    const options = { supabase, emailClient: client, karemEmail: "karem@example.com" };
+
+    await processReservationLead(RESERVATION_INPUT, RESERVATION_EMAIL_CONTEXT, options);
+
+    expect(send).toHaveBeenCalledTimes(3);
+    expect(
+      reservationEvents.rows.some((row) => row.dedupe_key === "customer_email_sent"),
+    ).toBe(true);
+    expect(
+      reservationEvents.rows.some(
+        (row) =>
+          row.event_type === "email_failed" &&
+          (row.metadata as Record<string, unknown>).recipient === "owner",
+      ),
+    ).toBe(true);
+
+    send.mockReset();
+    send.mockResolvedValueOnce({ ok: true, providerId: "owner-provider" });
+    await processReservationLead(RESERVATION_INPUT, RESERVATION_EMAIL_CONTEXT, options);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("el enlace privado existe solo en el correo del cliente y nunca en datos persistidos", async () => {
+    const { supabase, leads, events, reservationEvents } = createFakeSupabase();
+    const { client, send } = createFakeEmailClient([
+      { ok: true, providerId: "customer-provider" },
+      { ok: true, providerId: "owner-provider" },
+    ]);
+
+    await processReservationLead(RESERVATION_INPUT, RESERVATION_EMAIL_CONTEXT, {
+      supabase,
+      emailClient: client,
+      karemEmail: "karem@example.com",
+    });
+
+    expect(JSON.stringify(send.mock.calls[0][0])).toContain(
+      RESERVATION_EMAIL_CONTEXT.manageUrl,
+    );
+    expect(JSON.stringify(send.mock.calls[1][0])).not.toContain(
+      RESERVATION_EMAIL_CONTEXT.manageUrl,
+    );
+
+    const persisted = JSON.stringify({
+      leads: leads.rows,
+      automation: events.rows,
+      reservationEvents: reservationEvents.rows,
+    });
+    expect(persisted).not.toContain(RESERVATION_EMAIL_CONTEXT.manageUrl);
+    expect(persisted).not.toContain("token-claro");
+    expect(persisted).not.toMatch(/manageUrl|manage_token_hash/i);
+  });
+
+  it("rechaza defensivamente un normalized_payload que contenga el contexto privado", async () => {
+    const { supabase, leads } = createFakeSupabase();
+    const { client, send } = createFakeEmailClient([]);
+
+    await processReservationLead(
+      {
+        ...RESERVATION_INPUT,
+        normalizedPayload: { manageUrl: RESERVATION_EMAIL_CONTEXT.manageUrl },
+      },
+      RESERVATION_EMAIL_CONTEXT,
+      { supabase, emailClient: client, karemEmail: "karem@example.com" },
+    );
+
+    expect(leads.rows).toHaveLength(0);
+    expect(send).not.toHaveBeenCalled();
   });
 });

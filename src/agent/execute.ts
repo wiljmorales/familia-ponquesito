@@ -7,7 +7,7 @@ import type { EmailClient } from "@/email/client";
 import { askAssistant } from "@/assistant/service";
 import type { AssistantReply } from "@/assistant/types";
 import { normalizeWhatsapp } from "@/lib/utils/whatsapp";
-import { daysBetweenISO } from "@/lib/prototype/dates";
+import { daysBetweenISO } from "@/lib/business-dates";
 import { STATUS_LABEL } from "@/components/prototype/StatusBadge";
 import type { PrototypeOrder } from "@/types/prototype";
 import { INTENT_LABEL, MISSING_FIELD_LABEL, URGENCY_LABEL } from "./labels";

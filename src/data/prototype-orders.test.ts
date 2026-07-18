@@ -5,7 +5,7 @@ import {
   MAX_GUEST_COUNT,
   MIN_LEAD_DAYS,
 } from "@/lib/constants/business";
-import { daysBetweenISO } from "@/lib/prototype/dates";
+import { daysBetweenISO } from "@/lib/business-dates";
 import { ORDER_STATUSES } from "@/types/prototype";
 import { createPrototypeOrders, DEMO_PHONE } from "./prototype-orders";
 

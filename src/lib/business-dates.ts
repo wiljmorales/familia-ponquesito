@@ -1,9 +1,10 @@
 /**
- * Utilidades de fechas del prototipo (Reto 5). Trabajan siempre con días
+ * Utilidades compartidas de fechas del negocio. Trabajan siempre con días
  * calendario "YYYY-MM-DD" anclados a la zona horaria del negocio
- * (America/Caracas), igual que el clasificador de leads del Reto 4
- * (src/leads/classify.ts): el prototipo no debe depender del huso horario
- * del navegador ni del servidor para decidir si una fecha está vencida.
+ * (America/Caracas): ninguna decisión (anticipación, vencimiento,
+ * disponibilidad) debe depender del huso horario del navegador ni del
+ * servidor (Vercel corre en UTC). Nacieron en el prototipo del Reto 5 y se
+ * promovieron aquí al ser necesarias también por los Retos 4, 7 y 8.
  */
 
 const BUSINESS_TIMEZONE = "America/Caracas";

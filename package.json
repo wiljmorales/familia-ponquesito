@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify:agenda-concurrency": "node --env-file=.env.local --experimental-strip-types scripts/verify-agenda-concurrency.ts"
   },
   "dependencies": {
     "@google/genai": "^2.11.0",

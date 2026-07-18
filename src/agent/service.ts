@@ -5,7 +5,7 @@ import { AGENT_DECISIONS_TABLE } from "@/lib/supabase/config";
 import type { EmailClient } from "@/email/client";
 import type { AssistantReply } from "@/assistant/types";
 import type { processLead } from "@/leads/service";
-import { businessTodayISO } from "@/lib/prototype/dates";
+import { businessTodayISO } from "@/lib/business-dates";
 import { createPrototypeOrders, DEMO_PHONE } from "@/data/prototype-orders";
 import type { PrototypeOrder } from "@/types/prototype";
 import { defaultAgentAnalyzer } from "./analyze";

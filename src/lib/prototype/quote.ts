@@ -13,7 +13,7 @@ import {
 } from "@/lib/constants/business";
 import { formatDateEs } from "@/email/format-date";
 import type { PrototypeOrder, QuoteInput } from "@/types/prototype";
-import { addDaysISO } from "./dates";
+import { addDaysISO } from "@/lib/business-dates";
 
 export interface QuoteTotals {
   /** Base + decoración + delivery (si está activo), antes del descuento. */

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
-import { businessTodayISO } from "@/lib/prototype/dates";
+import { businessTodayISO } from "@/lib/business-dates";
 import PrototypeApp from "./prototype-app";
 
 export const metadata: Metadata = {

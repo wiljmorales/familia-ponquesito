@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // bundler que distinga cliente/servidor, así que se neutraliza aquí.
 vi.mock("server-only", () => ({}));
 
-import { addDaysISO, businessTodayISO } from "@/lib/prototype/dates";
+import { addDaysISO, businessTodayISO } from "@/lib/business-dates";
 import type { EmailClient } from "@/email/client";
 import {
   parseAgentRequest,

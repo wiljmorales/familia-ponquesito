@@ -16,7 +16,7 @@ import type {
   SentQuote,
   StatusFilter,
 } from "@/types/prototype";
-import { daysBetweenISO } from "./dates";
+import { daysBetweenISO } from "@/lib/business-dates";
 import { buildCustomerMessage, computeQuoteTotals, isQuoteValid } from "./quote";
 
 export interface PrototypeState {

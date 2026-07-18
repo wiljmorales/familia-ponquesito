@@ -3,7 +3,7 @@
 import { Check, Sparkles } from "lucide-react";
 import { CakeIcon, ClockIcon, DeliveryIcon, PeopleIcon } from "@/components/ui/icons";
 import { formatDateEs } from "@/email/format-date";
-import { daysBetweenISO } from "@/lib/prototype/dates";
+import { daysBetweenISO } from "@/lib/business-dates";
 import { orderAttention } from "@/lib/prototype/reducer";
 import type { PrototypeOrder } from "@/types/prototype";
 import PrototypeButton from "./PrototypeButton";
