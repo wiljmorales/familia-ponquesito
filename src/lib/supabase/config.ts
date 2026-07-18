@@ -5,3 +5,6 @@ export const LEADS_TABLE = "leads";
 export const LEAD_AUTOMATION_EVENTS_TABLE = "lead_automation_events";
 export const WEEKLY_REPORTS_TABLE = "weekly_reports";
 export const AGENT_DECISIONS_TABLE = "agent_decisions";
+export const PRODUCTION_DAY_OVERRIDES_TABLE = "production_day_overrides";
+export const CAKE_RESERVATIONS_TABLE = "cake_reservations";
+export const RESERVATION_EVENTS_TABLE = "reservation_events";

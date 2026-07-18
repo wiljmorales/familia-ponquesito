@@ -1,0 +1,85 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import { MIN_LEAD_DAYS } from "@/lib/constants/business";
+import {
+  BOOKING_WINDOW_DAYS,
+  COMPLEX_CAKE_POINTS,
+  CUSTOM_CAKE_POINTS,
+  DEFAULT_DAILY_CAPACITY,
+  SIMPLE_CAKE_POINTS,
+} from "./capacity";
+import { CAPACITY_CONSUMING_STATUSES, RESERVATION_STATUSES } from "./types";
+
+/**
+ * Guardia de alineación SQL ↔ TypeScript (Reto 8). La autoridad en tiempo
+ * de ejecución son los helpers agenda_* de supabase/schema.sql; las
+ * constantes TS son espejos para la UI y la validación temprana. Si este
+ * test falla, alguien cambió un lado sin el otro: corrige ambos.
+ */
+
+const schema = readFileSync(
+  new URL("../../supabase/schema.sql", import.meta.url),
+  "utf8",
+);
+
+// Limita las búsquedas a la sección del Reto 8 (otras tablas también
+// tienen columnas status/checks similares).
+const reto8Start = schema.indexOf('Reto 8: "Agenda Ponquesito"');
+const reto8 = schema.slice(reto8Start);
+
+function sqlHelperValue(name: string): number {
+  const match = reto8.match(
+    new RegExp(
+      `create or replace function public\\.${name}\\(\\)\\s*` +
+        `returns integer\\s*language sql immutable\\s*as \\$\\$ select (\\d+) \\$\\$;`,
+    ),
+  );
+  if (!match) throw new Error(`No se encontró el helper SQL ${name}()`);
+  return Number(match[1]);
+}
+
+describe("alineación supabase/schema.sql ↔ constantes TypeScript", () => {
+  it("la sección del Reto 8 existe en el esquema", () => {
+    expect(reto8Start).toBeGreaterThan(-1);
+  });
+
+  it("agenda_default_capacity() = DEFAULT_DAILY_CAPACITY", () => {
+    expect(sqlHelperValue("agenda_default_capacity")).toBe(DEFAULT_DAILY_CAPACITY);
+  });
+
+  it("agenda_min_lead_days() = MIN_LEAD_DAYS", () => {
+    expect(sqlHelperValue("agenda_min_lead_days")).toBe(MIN_LEAD_DAYS);
+  });
+
+  it("agenda_booking_window_days() = BOOKING_WINDOW_DAYS", () => {
+    expect(sqlHelperValue("agenda_booking_window_days")).toBe(BOOKING_WINDOW_DAYS);
+  });
+
+  it("agenda_capacity_consuming_statuses() = CAPACITY_CONSUMING_STATUSES", () => {
+    const match = reto8.match(
+      /agenda_capacity_consuming_statuses\(\)\s*returns text\[\]\s*language sql immutable\s*as \$\$ select array\[([^\]]+)\]::text\[\] \$\$;/,
+    );
+    expect(match).not.toBeNull();
+    const sqlStatuses = match![1]
+      .split(",")
+      .map((s) => s.trim().replace(/^'|'$/g, ""));
+    expect(sqlStatuses).toEqual([...CAPACITY_CONSUMING_STATUSES]);
+  });
+
+  it("el check de capacity_points coincide con los puntos por complejidad", () => {
+    const match = reto8.match(/check \(capacity_points in \((\d), (\d), (\d)\)\)/);
+    expect(match).not.toBeNull();
+    expect(match!.slice(1, 4).map(Number)).toEqual([
+      SIMPLE_CAKE_POINTS,
+      CUSTOM_CAKE_POINTS,
+      COMPLEX_CAKE_POINTS,
+    ]);
+  });
+
+  it("el check de status de cake_reservations coincide con RESERVATION_STATUSES", () => {
+    const match = reto8.match(/status in \(([^)]+)\)/);
+    expect(match).not.toBeNull();
+    const sqlStatuses = match![1].split(",").map((s) => s.trim().replace(/^'|'$/g, ""));
+    expect(sqlStatuses).toEqual([...RESERVATION_STATUSES]);
+  });
+});
