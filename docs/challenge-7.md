@@ -163,8 +163,10 @@ contacto en vez de registrar).
 
 ## Pendientes
 
-- Aplicar `supabase/schema.sql` actualizado en el SQL Editor del proyecto
-  real (crea `agent_decisions` y amplía el check de `leads.source_type`).
-- Tras aplicarlo, verificar el caso 1 completo en un entorno real: lead
-  `FP-7-XXXX` en `leads`, correos del Reto 4 y fila completada en
-  `agent_decisions`.
+Ninguno. El esquema se aplicó en el proyecto real de Supabase
+(2026-07-17) y el caso 1 se verificó completo contra ese entorno: lead
+`FP-7-CKB7` registrado en `leads` (prioridad alta, fecha resuelta por
+Gemini), fila de `agent_decisions` completada (`lead_registered`,
+`decision_source = 'gemini'`) y los tres eventos de la automatización del
+Reto 4 en `success` (`lead_registered`, `customer_email`, `owner_email`),
+es decir, ambos correos reales enviados.
