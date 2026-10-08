@@ -1,9 +1,9 @@
 # Base de conocimiento — Familia Ponquesito
 
 Fuente: respuestas de Karem al cuestionario de descubrimiento (2026-07-11)
-y respuestas directas de Wilfredo (mismo día). Este archivo es la **única
-fuente de verdad** del asistente: lo que no esté aquí como confirmado, el
-asistente debe admitir que no lo sabe.
+y respuestas directas del equipo del proyecto (mismo día). Este archivo es la
+**única fuente de verdad** del asistente: lo que no esté aquí como
+confirmado, el asistente debe admitir que no lo sabe.
 
 ## Confirmado
 

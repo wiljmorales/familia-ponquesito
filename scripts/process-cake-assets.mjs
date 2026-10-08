@@ -26,7 +26,8 @@
 // canal RGB que deja el modelo de segmentación en el área que borró no
 // es confiable (no es el color real).
 //
-// Uso: node scripts/process-cake-assets.mjs
+// Uso: node scripts/process-cake-assets.mjs <carpeta-con-los-PNG-fuente>
+// (los PNG fuente viven fuera del repo; ver docs/challenge-3.md).
 
 import { removeBackground } from "@imgly/background-removal-node";
 import sharp from "sharp";
@@ -35,7 +36,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SRC_DIR = "/home/wiljmorales/Downloads/juego FP";
+const SRC_DIR = process.argv[2];
+if (!SRC_DIR) {
+  console.error("Uso: node scripts/process-cake-assets.mjs <carpeta-con-los-PNG-fuente>");
+  process.exit(1);
+}
 const OUT_DIR = path.join(__dirname, "..", "public", "assets", "cake-builder");
 
 const ALPHA_BG_THRESHOLD = 10;

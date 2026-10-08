@@ -1,0 +1,31 @@
+# /etc/caddy/Caddyfile — etapa de staging (el dominio principal NO se sirve
+# todavía desde este VPS). Credenciales de acceso en /etc/caddy/staging.env
+# (fuera de Git), cargadas por systemd: ver deploy/caddy/README.md.
+{
+	# Solo HTTP/1.1 y HTTP/2: no se abre 443/udp.
+	servers {
+		protocols h1 h2
+	}
+}
+
+import /etc/caddy/ponquesito.caddy
+
+staging.familiaponquesito.com {
+	log
+	import ponquesito_cabeceras
+	header X-Robots-Tag "noindex, nofollow, noarchive"
+
+	route {
+		basic_auth {
+			{$STAGING_BASIC_AUTH_USER} {$STAGING_BASIC_AUTH_HASH}
+		}
+		import ponquesito_staging_guard
+		import ponquesito_rutas 127.0.0.1:8000 127.0.0.1:3000
+	}
+
+	# Un servicio aún no desplegado (Next.js) o caído: respuesta clara en vez
+	# de un 502.
+	handle_errors 502 {
+		respond "Servicio todavía no disponible en staging" 503
+	}
+}

@@ -1,0 +1,46 @@
+# Familia Ponquesito — backend Django con Gunicorn.
+# Instalación, actualización y reversión: backend/README.md.
+[Unit]
+Description=Familia Ponquesito backend (Gunicorn)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=notify
+NotifyAccess=main
+User=ponquesito
+Group=ponquesito
+WorkingDirectory=/srv/ponquesito/backend
+# Lo lee systemd antes de arrancar el proceso.
+EnvironmentFile=/srv/ponquesito/backend.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/srv/ponquesito/venv/bin/gunicorn -c /srv/ponquesito/backend/gunicorn.conf.py config.wsgi:application
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=5
+UMask=0027
+
+# Aislamiento: el servicio solo lee su código y no puede escalar privilegios.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

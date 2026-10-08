@@ -1,0 +1,48 @@
+# Familia Ponquesito — rutas compartidas por staging, producción y la prueba
+# local. Se importa dentro de un bloque `route` para que el orden sea literal.
+#
+#   import ponquesito_rutas <upstream-django> <upstream-next>
+#
+# Contrato (ver deploy/caddy/README.md): Django solo atiende /health/ y
+# /api/v1/*; todo lo demás, incluidos /, /linktree y el resto de /api/*, es
+# de Next.js. Caddy no sirve páginas propias.
+
+(ponquesito_rutas) {
+	# Django recibe la ruta completa, sin recortes. /api/v1x o /api/v10 no
+	# coinciden: siguen a Next.js.
+	@django path /health /health/ /api/v1 /api/v1/*
+	handle @django {
+		reverse_proxy {args[0]}
+	}
+
+	# Todo lo demás: Next.js.
+	handle {
+		reverse_proxy {args[1]}
+	}
+}
+
+# Staging: nada de Next.js que escriba datos o envíe correos. Bloquea, solo
+# hacia Next.js, todo método distinto de GET/HEAD (las Server Actions son
+# POST) y sus rutas /api/* (asistente, agente, reporte con cron). Django
+# (/health/ y /api/v1/*) no se bloquea: aplica su propio CSRF.
+(ponquesito_staging_guard) {
+	@escrituras_next {
+		not path /health /health/ /api/v1 /api/v1/*
+		not method GET HEAD
+	}
+	respond @escrituras_next "Deshabilitado en staging" 403
+	@api_next {
+		path /api/*
+		not path /api/v1 /api/v1/*
+	}
+	respond @api_next "Deshabilitado en staging" 403
+}
+
+# Cabeceras comunes de seguridad.
+(ponquesito_cabeceras) {
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}

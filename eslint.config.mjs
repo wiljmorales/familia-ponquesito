@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Backend Django (Python); su .venv incluye JS de terceros.
+    "backend/**",
   ]),
 ]);
 
