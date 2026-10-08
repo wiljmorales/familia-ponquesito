@@ -164,7 +164,7 @@ if [ -n "$NEXT_DIR" ]; then
   ok "/ es el landing de Next.js"          "1" "$(echo "$HOME_HTML" | grep -c '/_next/static' | sed 's/[1-9][0-9]*/1/')"
   ok "/ no es la página de enlaces"        "1" "$([ "$(echo -n "$HOME_HTML" | sha)" != "$LT_SHA" ] && echo 1)"
   ok "/linktree byte a byte"               "$LT_SHA" "$(c $A/linktree | sha)"
-  ok "/linktree content-type"              "text/html; charset=utf-8" "$(hdr Content-Type $A/linktree)"
+  ok "/linktree content-type"              "text/html; charset=utf-8" "$(hdr Content-Type $A/linktree | tr A-Z a-z)"
   ok "/linktree?utm_source=qr byte a byte" "$LT_SHA" "$(c "$A/linktree?utm_source=qr" | sha)"
   ok "/linktree/?a=1 → 308"                "308" "$(code "$A/linktree/?a=1")"
   ok "/linktree/?a=1 → Location"           "/linktree?a=1" "$(hdr Location "$A/linktree/?a=1")"
