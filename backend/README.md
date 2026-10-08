@@ -1,8 +1,12 @@
 # Backend Django — base mínima
 
 Base de Django con PostgreSQL en el VPS de Hetzner. En esta etapa solo hay
-un endpoint, `/health/`. No incluye módulos de negocio, Django Admin ni
-datos de Supabase. El frontend Next.js de la raíz no cambia.
+un endpoint, `/health/`, y el espacio `/api/v1/` reservado y vacío. No
+incluye módulos de negocio, Django Admin ni datos de Supabase.
+
+Comparte origen con el frontend Next.js de la raíz. Caddy envía a Django
+solo `/health/` y `/api/v1/*`; todo lo demás, incluido el resto de `/api/*`,
+es de Next.js (ver `deploy/caddy/README.md`).
 
 ## Versiones
 
@@ -35,8 +39,36 @@ no hay otra en el repositorio ni en el equipo local.
 - Si falta `DJANGO_SECRET_KEY` o alguna credencial de PostgreSQL, Django no
   arranca.
 - `DEBUG` está desactivado por defecto.
-- `DJANGO_ALLOWED_HOSTS` es obligatoria y no tiene valor por defecto. En el
-  VPS vale `127.0.0.1,localhost`.
+- `DJANGO_ALLOWED_HOSTS` es obligatoria y no tiene valor por defecto. Para
+  el acceso por túnel vale `127.0.0.1,localhost`; detrás de Caddy hay que
+  añadir el nombre público.
+- Las cookies de sesión y CSRF llevan `Path=/api/v1/`, para no mezclarse con
+  las de Next.js en el mismo origen.
+- Publicación detrás de Caddy. Las dos variables son opcionales; si no se
+  definen, el comportamiento es el del acceso por túnel.
+  - `DJANGO_BEHIND_HTTPS_PROXY=true`: confía en `X-Forwarded-Proto` y marca
+    las cookies como `Secure`.
+  - `DJANGO_CSRF_TRUSTED_ORIGINS`: los orígenes HTTPS públicos.
+
+## Pruebas
+
+```bash
+DJANGO_SECRET_KEY=x DJANGO_ALLOWED_HOSTS=localhost POSTGRES_DB=x POSTGRES_USER=x POSTGRES_PASSWORD=x \
+  .venv/bin/python manage.py test config.tests
+```
+
+`config/tests/test_routing.py` no necesita base de datos y comprueba, con y
+sin proxy HTTPS delante:
+
+- `reverse()`, `redirect()`, `APPEND_SLASH` y la URL absoluta HTTPS;
+- `Path=/api/v1/`, `Secure` y `HttpOnly` de las cookies;
+- el rechazo de un `Host` ajeno;
+- que Django solo resuelve `/health/` y `/api/v1/*`, y no `/`, `/linktree`
+  ni las rutas `/api/*` de Next.js.
+
+Las URLs `api/v1/probe/` solo existen en `config/tests/probe_urls.py` y no se
+sirven en el VPS. La prueba con Caddy delante está en
+`deploy/caddy/test/run-local.sh`.
 
 ## PostgreSQL en el VPS
 

@@ -28,6 +28,21 @@ DEBUG = env("DJANGO_DEBUG", "false").lower() == "true"
 # Obligatorio y explícito en cada entorno; sin valor por defecto.
 ALLOWED_HOSTS = [h.strip() for h in env("DJANGO_ALLOWED_HOSTS").split(",") if h.strip()]
 
+# Django comparte origen con Next.js y solo atiende /health/ y /api/v1/*. Sus
+# cookies se limitan a /api/v1/ para que no viajen en las peticiones de
+# Next.js ni choquen con las suyas.
+SESSION_COOKIE_PATH = "/api/v1/"
+CSRF_COOKIE_PATH = "/api/v1/"
+
+# Solo cuando Caddy termina HTTPS delante: confía en X-Forwarded-Proto (Caddy
+# lo fija siempre) y marca las cookies como Secure.
+if env("DJANGO_BEHIND_HTTPS_PROXY", "false").lower() == "true":
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in env("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
+
 # Django Admin no se instala en esta etapa: no hay nada que administrar y no
 # debe quedar expuesto. contrib.auth se conserva para las migraciones base.
 INSTALLED_APPS = [
