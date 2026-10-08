@@ -1,0 +1,39 @@
+# Prueba local de las rutas: mismos snippets que staging/producción, con
+# nombres .test, TLS interno de Caddy y puertos altos. Ver run-local.sh.
+{
+	http_port 18080
+	https_port 18443
+	skip_install_trust
+	local_certs
+	servers {
+		protocols h1 h2
+	}
+}
+
+import ../ponquesito.caddy
+
+apex.ponquesito.test {
+	import ponquesito_cabeceras
+	route {
+		import ponquesito_rutas 127.0.0.1:18001 127.0.0.1:18002
+	}
+}
+
+www.ponquesito.test {
+	redir https://apex.ponquesito.test{uri} 301
+}
+
+staging.ponquesito.test {
+	import ponquesito_cabeceras
+	header X-Robots-Tag "noindex, nofollow, noarchive"
+	route {
+		basic_auth {
+			{$STAGING_BASIC_AUTH_USER} {$STAGING_BASIC_AUTH_HASH}
+		}
+		import ponquesito_staging_guard
+		import ponquesito_rutas 127.0.0.1:18001 127.0.0.1:18002
+	}
+	handle_errors 502 {
+		respond "Servicio todavía no disponible en staging" 503
+	}
+}

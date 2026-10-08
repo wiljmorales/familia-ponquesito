@@ -108,13 +108,27 @@ passwd <admin>        # interactivo; lo hace el propio administrador
    - PostgreSQL;
    - `/health/` por túnel.
 
-## 6. Rescate
+## 6. Proxy inverso y HTTPS (Caddy)
+
+- Rutas en el mismo origen:
+  - `/health/` y `/api/v1/*`: Django;
+  - todo lo demás, incluidos `/` (landing), `/linktree` (página de enlaces
+    de los QR) y el resto de `/api/*`: Next.js;
+  - `www`: redirige al apex.
+- Caddy no sirve contenido propio, así que no necesita leer nada de
+  `/srv/ponquesito` (backend y secretos, 2750).
+- Instalación, configuración de staging con acceso restringido,
+  verificación y reversión: [`deploy/caddy/README.md`](../deploy/caddy/README.md).
+
+## 7. Rescate
 
 Entra por Console/VNC y, según lo que haya que deshacer:
 
 - **SSH:** `rm /etc/ssh/sshd_config.d/10-hardening.conf && systemctl reload ssh`.
 - **Firewall:** `ufw disable`.
 - **Backend:** `systemctl disable --now ponquesito-backend`.
+- **Exposición web:** `ufw delete allow 80/tcp`, `ufw delete allow 443/tcp`
+  y `systemctl disable --now caddy`.
 
 ## Estado y pendientes (2026-10-08)
 
@@ -141,3 +155,6 @@ Entra por Console/VNC y, según lo que haya que deshacer:
    en una ventana acordada.
 5. Ejecutar por primera vez `sudo systemctl reload ponquesito-backend`.
 6. Evaluar más adelante: fail2ban y swap.
+7. Staging (`deploy/caddy/README.md`): registro DNS de staging, Caddy, 80 y
+   443 en UFW y verificación desde una red independiente. Preparado, sin
+   aplicar.
