@@ -20,6 +20,23 @@ solo enruta.
 Django refuerza el contrato: solo resuelve `/health/` y `/api/v1/*`, y sus
 cookies llevan `Path=/api/v1/` (ver `backend/README.md`).
 
+### IP del cliente
+
+Los limitadores de Next.js (agenda, reservas, asistente y agente) usan como
+clave el primer valor de `X-Forwarded-For`, o `X-Real-IP` si faltara. Caddy
+es el único proxy público, así que el snippet `ponquesito_ip_cliente` fija
+ambas cabeceras a la IP del par TCP (`{remote_host}`) y elimina `Forwarded`.
+El cliente no puede elegir su IP; `test/run-local.sh` lo comprueba con
+cabeceras falsificadas.
+
+- **Sin el snippet**, Caddy 2.11 ya reemplaza `X-Forwarded-For`, pero deja
+  pasar el `X-Real-IP` y el `Forwarded` que envíe el cliente.
+- **Si se pone Cloudflare u otro proxy delante de Caddy, hay que revisar esta
+  regla:** `{remote_host}` sería la IP del proxy y todos los clientes
+  compartirían un límite. Habría que configurar `trusted_proxies` y
+  `client_ip_headers` solo con los rangos de ese proxy, y usar
+  `{client_ip}`.
+
 ## Archivos
 
 | Archivo | Uso |

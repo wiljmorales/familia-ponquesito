@@ -12,13 +12,32 @@
 	# coinciden: siguen a Next.js.
 	@django path /health /health/ /api/v1 /api/v1/*
 	handle @django {
-		reverse_proxy {args[0]}
+		reverse_proxy {args[0]} {
+			import ponquesito_ip_cliente
+		}
 	}
 
 	# Todo lo demás: Next.js.
 	handle {
-		reverse_proxy {args[1]}
+		reverse_proxy {args[1]} {
+			import ponquesito_ip_cliente
+		}
 	}
+}
+
+# IP del cliente hacia las aplicaciones. Caddy es el único proxy público: la
+# IP es la del par TCP ({remote_host}) y el cliente no puede elegirla. Los
+# limitadores de Next.js usan el primer valor de X-Forwarded-For (y X-Real-IP
+# si faltara). Sin esto, Caddy ya reemplaza X-Forwarded-For, pero deja pasar
+# X-Real-IP y Forwarded tal como los envía el cliente.
+#
+# Si algún día se pone Cloudflare u otro proxy delante de Caddy, {remote_host}
+# sería la IP de ese proxy: habría que configurar trusted_proxies y
+# client_ip_headers y revisar esta regla (deploy/caddy/README.md).
+(ponquesito_ip_cliente) {
+	header_up X-Forwarded-For {remote_host}
+	header_up X-Real-IP {remote_host}
+	header_up -Forwarded
 }
 
 # Staging: nada de Next.js que escriba datos o envíe correos. Bloquea, solo

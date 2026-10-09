@@ -47,7 +47,7 @@ export STAGING_BASIC_AUTH_HASH="$("$CADDY" hash-password --plaintext "$STAGING_P
     --error-logfile "$TMP/gunicorn.log" --access-logfile "$TMP/access.log" config.wsgi:application
 ) & PIDS+=($!)
 : > "$TMP/next.log"
-python3 -I "$ROOT/deploy/caddy/test/next_stub.py" 18002 "$TMP/next.log" & STUB=$!; PIDS+=($STUB)
+python3 -I "$ROOT/deploy/caddy/test/next_stub.py" 18002 "$TMP/next.log" "$TMP/ip.log" & STUB=$!; PIDS+=($STUB)
 
 cd "$ROOT/deploy/caddy/test"
 "$CADDY" validate --config Caddyfile.local --adapter caddyfile >"$TMP/validate.log" 2>&1 \
@@ -117,6 +117,18 @@ ok "/api/v1/no-existe/ → 404 de Django"    "404" "$(code $A/api/v1/no-existe/)
 ok "/api/v1 → Django (404)"                "404" "$(code $A/api/v1)"
 ok "POST /api/v1/probe/cookies/ → CSRF de Django (403)" "403" "$(code -X POST $A/api/v1/probe/cookies/)"
 nada_a_next "/api/v1/*"
+
+echo "-- IP del cliente (rate limiter de Next.js)"
+# El cliente es 127.0.0.1: Next.js debe recibir esa IP, nunca la que el
+# cliente escriba en las cabeceras. Direcciones de documentación (RFC 5737).
+ip() { : > "$TMP/ip.log"; c -o /dev/null "$@"; cat "$TMP/ip.log"; }
+LIMPIO="xff=[127.0.0.1] xri=[127.0.0.1] fwd=[]"
+ok "sin cabeceras del cliente"             "$LIMPIO" "$(ip $A/ip)"
+ok "X-Forwarded-For falsificado"           "$LIMPIO" "$(ip -H 'X-Forwarded-For: 203.0.113.7' $A/ip)"
+ok "X-Forwarded-For múltiple y repetido"   "$LIMPIO" "$(ip -H 'X-Forwarded-For: 203.0.113.7, 198.51.100.1' -H 'X-Forwarded-For: 192.0.2.9' $A/ip)"
+ok "X-Real-IP y Forwarded falsificados"    "$LIMPIO" "$(ip -H 'X-Real-IP: 203.0.113.8' -H 'Forwarded: for=203.0.113.9' $A/ip)"
+ok "staging: todo falsificado"             "$LIMPIO" "$(ip "${AUTH[@]}" -H 'X-Forwarded-For: 203.0.113.7' -H 'X-Real-IP: 203.0.113.8' -H 'Forwarded: for=203.0.113.9' $S/ip)"
+: > "$TMP/next.log"
 
 echo "-- Cabeceras y HTTP"
 ok "nosniff"                               "nosniff" "$(hdr X-Content-Type-Options $A/health/)"
