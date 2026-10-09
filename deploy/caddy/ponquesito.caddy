@@ -25,6 +25,40 @@
 	}
 }
 
+# Lanzamiento fase 1 (2026-10-09): solo la página de enlaces es pública.
+#
+#   import ponquesito_fase1 <upstream-django> <upstream-next>
+#
+# Lista blanca: /linktree (y /linktree/, que Next.js redirige con 308), sus
+# recursos (/favicon.svg y /assets/logo-familia-ponquesito.png, nada más de /assets/) y /health/ de
+# Django. / redirige con
+# 302 a /linktree conservando los parámetros. Cualquier otra ruta, incluidas
+# /api/* (también /api/v1/*), /_next/* y las páginas de la aplicación, es 404
+# de Caddy y no llega a ninguna aplicación. En las rutas permitidas solo se
+# aceptan GET y HEAD (405 para el resto): la página no tiene formularios.
+(ponquesito_fase1) {
+	@no_publico not path / /linktree /linktree/ /favicon.svg /assets/logo-familia-ponquesito.png /health/
+	respond @no_publico "No encontrado" 404
+
+	@no_lectura not method GET HEAD
+	header @no_lectura Allow "GET, HEAD"
+	respond @no_lectura "Método no permitido" 405
+
+	@raiz path /
+	redir @raiz /linktree{?query} 302
+
+	handle /health/ {
+		reverse_proxy {args[0]} {
+			import ponquesito_ip_cliente
+		}
+	}
+	handle {
+		reverse_proxy {args[1]} {
+			import ponquesito_ip_cliente
+		}
+	}
+}
+
 # IP del cliente hacia las aplicaciones. Caddy es el único proxy público: la
 # IP es la del par TCP ({remote_host}) y el cliente no puede elegirla. Los
 # limitadores de Next.js usan el primer valor de X-Forwarded-For (y X-Real-IP

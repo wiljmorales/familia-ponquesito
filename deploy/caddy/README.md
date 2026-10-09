@@ -5,6 +5,11 @@ certificados de Let's Encrypt, y reparte las peticiones entre Django y
 Next.js, todo en el **mismo origen**. Caddy **no sirve páginas propias**:
 solo enruta.
 
+> **Lanzamiento fase 1 (2026-10-09):** el dominio principal solo publica
+> `/linktree`. Ver [Lanzamiento fase 1](#lanzamiento-fase-1-solo-linktree);
+> el contrato de abajo es el de la aplicación completa (staging y fases
+> posteriores).
+
 ## Contrato de rutas
 
 | Ruta | Servicio | Notas |
@@ -41,11 +46,12 @@ cabeceras falsificadas.
 
 | Archivo | Uso |
 |---|---|
-| `ponquesito.caddy` | Snippets compartidos: rutas, protección de staging y cabeceras. Se instala en `/etc/caddy/ponquesito.caddy`. |
+| `ponquesito.caddy` | Snippets compartidos: rutas, fase 1, protección de staging y cabeceras. Se instala en `/etc/caddy/ponquesito.caddy`. |
+| `Caddyfile.fase1` | Preparado, **sin instalar**. Lanzamiento fase 1: apex solo con `/linktree` y `www` → apex. Sin staging público. |
 | `Caddyfile.staging` | Configuración **actual**: solo `staging.familiaponquesito.com`, con acceso restringido. |
-| `Caddyfile.production` | Preparado, **sin instalar**. Apex, `www` → apex y staging. Se usará en el corte del dominio principal. |
+| `Caddyfile.production` | Preparado, **sin instalar**. Aplicación completa en el apex, `www` → apex y staging. Para una fase posterior. |
 | `sync-to-vps.sh` | Copia `deploy/caddy/` del commit indicado a `~/ponquesito-caddy` del administrador. |
-| `test/run-local.sh` | Prueba local de todas las rutas, con Django real y Next.js (sustituto y, opcionalmente, real). |
+| `test/run-local.sh` | Prueba local de todas las rutas (apex completo, `www`, staging y fase 1), con Django real y Next.js (sustituto y, opcionalmente, real: un checkout con `NEXT_DIR` o un release de `deploy/web` con `NEXT_RELEASE`). Valida además `Caddyfile.fase1`, `.production` y `.staging`. |
 
 ## Staging
 
@@ -79,6 +85,10 @@ CADDY=/ruta/a/caddy deploy/caddy/test/run-local.sh
 # Fases 1 y 2: además, Next.js real sobre un build hecho en un checkout
 # limpio (sin .env*; el script se niega si los encuentra)
 CADDY=/ruta/a/caddy NEXT_DIR=/ruta/al/checkout deploy/caddy/test/run-local.sh
+
+# O con un release standalone de deploy/web (p. ej. el de producción),
+# extraído de su artefacto
+CADDY=/ruta/a/caddy NEXT_RELEASE=/ruta/al/release deploy/caddy/test/run-local.sh
 ```
 
 Usa nombres `.test`, TLS interno de Caddy (`local_certs`) y los puertos
@@ -96,10 +106,20 @@ sesiones en cookie firmada), sin PostgreSQL ni datos reales. Comprueba:
 - **Staging:** 401 sin credenciales o con credenciales erróneas; `noindex`;
   POST, PUT y `/api/*` hacia Next.js bloqueados sin llegar a él; `/api/v1/*`
   sí llega a Django; 503 si Next.js está caído y Django sigue respondiendo.
+- **Lanzamiento fase 1:** `/` → 302 con parámetros; `/linktree`, sus dos
+  recursos y `/health/` pasan; el resto de `/assets/*` (incluidos archivos
+  reales del cake builder) → 404 sin llegar a Next.js; HEAD también; POST, PUT, DELETE, PATCH y
+  OPTIONS → 405 con `Allow`; las rutas de la aplicación, `/api/*`,
+  `/_next/*` y rutas con `..`, `%2e%2e` o `//` → 404 sin llegar a ninguna
+  aplicación; HTTP → HTTPS, `www` → apex, IP del cliente y cabeceras; el
+  bloque de `Caddyfile.fase1` es el probado.
 - **Fase 2 (Next.js real):** `/` es el landing de Next.js y no la página de
   enlaces; `/linktree` (con y sin parámetros), favicon y logo byte a byte;
   `/linktree/?a=1` → 308 a `/linktree?a=1`; las API de Next.js responden
-  desde Next.js; `/api/v1/*` y `/health/` siguen en Django.
+  desde Next.js; `/api/v1/*` y `/health/` siguen en Django. En fase 1:
+  `/` y `www` llevan a la página de enlaces byte a byte, todos sus recursos
+  cargan, no usa `/_next` ni scripts, y con Next.js caído la respuesta es
+  503 mientras `/health/` sigue en Django.
 
 ## Instalación de staging en el VPS
 
@@ -247,10 +267,44 @@ Para dar staging por bueno:
 | Django sin proxy | Quitar de `backend.env` las líneas del paso 6 (restaurar `DJANGO_ALLOWED_HOSTS=127.0.0.1,localhost`) y `sudo systemctl restart ponquesito-backend` |
 | DNS | Borrar el registro A `staging` en Porkbun |
 
-## Producción (más adelante)
+## Lanzamiento fase 1: solo Linktree
 
-`Caddyfile.production` añade el apex y `www` → apex. Solo se instala cuando
-staging esté verificado y se haya aprobado el cambio del dominio principal.
+Decidido el 2026-10-09 (`docs/decisions.md`). Los QR apuntan a
+`https://familiaponquesito.com/linktree`. `Caddyfile.fase1` usa el snippet
+`ponquesito_fase1`, una lista blanca:
+
+| Petición | Respuesta |
+|---|---|
+| `GET /`, `GET /?…` | 302 → `/linktree` (conserva los parámetros) |
+| `GET /linktree`, `GET /linktree?…` | Next.js: `public/linktree.html` |
+| `GET /linktree/` | Next.js: 308 → `/linktree` |
+| `GET /favicon.svg`, `GET /assets/logo-familia-ponquesito.png` | Next.js: los dos únicos recursos de la página |
+| `GET /health/` | Django |
+| `HEAD` en las rutas anteriores | igual que `GET`, sin cuerpo |
+| Otro método (`POST`, `PUT`, `DELETE`, `PATCH`, `OPTIONS`) en esas rutas | 405 de Caddy, `Allow: GET, HEAD` |
+| Cualquier otra ruta y método: `/api/*` (incluida `/api/v1/*`), `/_next/*`, `/agenda*`, `/crea-tu-torta*`, `/agente*`, `/prototipo*`, `/reporte-semanal*`, `/asistente*`, `/health`, `/linktree.html`, `/favicon.ico`, `/robots.txt`, el resto de `/assets/*` (cake builder)… | 404 de Caddy (`No encontrado`); no llega a ninguna aplicación |
+| `http://…` | 308 → `https://…` (Caddy) |
+| `www.familiaponquesito.com/<ruta>?<query>` | 301 → `https://familiaponquesito.com/<ruta>?<query>` |
+| Next.js caído | 503 `Servicio no disponible temporalmente` en las rutas que van a Next.js |
+
+Caddy normaliza la ruta antes de comparar (`/assets/../agenda`,
+`/assets/%2e%2e/agenda` y `//agenda` son 404). Las mayúsculas no se
+distinguen al comparar: `/LINKTREE` sirve la misma página (la reescritura
+de Next.js tampoco las distingue), `/AGENDA` es 404 de Caddy y el logo en
+mayúsculas llega a Next.js, que responde 404.
+`test/run-local.sh` lo prueba todo, también con el artefacto de producción
+real (`NEXT_RELEASE`), y comprueba que el bloque de `Caddyfile.fase1` es el
+mismo que se prueba.
+
+Antes del corte, Django debe aceptar el apex: añadir
+`familiaponquesito.com` a `DJANGO_ALLOWED_HOSTS` y activar
+`DJANGO_BEHIND_HTTPS_PROXY=true` en `backend.env` (paso 6 de staging).
+
+## Producción completa (más adelante)
+
+`Caddyfile.production` publica la aplicación completa en el apex, con
+`www` → apex y staging. Sustituirá a `Caddyfile.fase1` cuando se apruebe
+publicar el resto de la aplicación con sus servicios externos.
 
 Para ese corte:
 - bajar antes el TTL del A del apex y del CNAME de `www`, y anotar sus

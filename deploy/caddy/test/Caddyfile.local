@@ -23,6 +23,21 @@ www.ponquesito.test {
 	redir https://apex.ponquesito.test{uri} 301
 }
 
+# Lanzamiento fase 1: el mismo bloque que Caddyfile.fase1, con nombres .test.
+fase1.ponquesito.test {
+	import ponquesito_cabeceras
+	route {
+		import ponquesito_fase1 127.0.0.1:18001 127.0.0.1:18002
+	}
+	handle_errors 502 {
+		respond "Servicio no disponible temporalmente" 503
+	}
+}
+
+www.fase1.ponquesito.test {
+	redir https://fase1.ponquesito.test{uri} 301
+}
+
 staging.ponquesito.test {
 	import ponquesito_cabeceras
 	header X-Robots-Tag "noindex, nofollow, noarchive"

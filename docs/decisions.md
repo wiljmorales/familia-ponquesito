@@ -537,3 +537,41 @@ marcado como obsoleto.
   - la base de conocimiento vuelve a dar como vigente que no hay local;
   - el asistente determinista deja de responder con la dirección;
   - reaparece una dirección de correo de ejemplo en la interfaz.
+
+## 2026-10-09 — Lanzamiento fase 1: solo Linktree
+
+Decisión de Frederik. El dominio principal publica únicamente la página de
+enlaces de los QR impresos; el resto de la aplicación no se publica todavía.
+
+- **URL de los QR**: `https://familiaponquesito.com/linktree`. Es
+  permanente.
+- **Rutas públicas** (`deploy/caddy/Caddyfile.fase1`, snippet
+  `ponquesito_fase1`), solo con GET y HEAD (cualquier otro método: 405):
+  - `/` → 302 temporal a `/linktree`, conservando los parámetros;
+  - `/linktree` y `/linktree/` (Next.js redirige esta con 308);
+  - sus dos recursos: `/favicon.svg` y `/assets/logo-familia-ponquesito.png`. El resto de
+    `/assets/*` (imágenes del cake builder) es 404 (instrucción de
+    Frederik: solo el logo);
+  - `/health/` de Django.
+
+  Cualquier otra ruta es 404 de Caddy y no llega a ninguna aplicación:
+  `/api/*` (incluida `/api/v1/*`), `/_next/*`, `/agenda`, `/crea-tu-torta`,
+  `/agente`, `/prototipo`, `/reporte-semanal` y `/asistente`.
+  `www.familiaponquesito.com` redirige con 301 al apex conservando ruta y
+  parámetros.
+- **Sin staging público**: staging se revisa por túnel SSH. Una sola
+  instancia de Next.js en `127.0.0.1:3000`.
+- **Artefacto de producción**: `deploy/web/production.build.env`
+  (`APP_CANONICAL_URL=https://familiaponquesito.com` y el WhatsApp oficial).
+  El mismo artefacto contiene toda la aplicación; lo que no se publica lo
+  bloquea Caddy.
+- **Sin servicios externos**: no se configuran Supabase, Gemini, SMTP,
+  Resend ni cron. No se copia ningún secreto de `.env.local`, que es del
+  entorno de desarrollo de Vercel del reto y apunta a un proyecto de
+  Supabase que ya no existe. `web.env` de producción solo lleva
+  `APP_CANONICAL_URL`. Las funciones que dependen de esos servicios
+  (formularios, agenda, asistente, agente, reporte semanal) quedan detrás
+  del 404 de Caddy.
+- **Motivo**: publicar ya lo que los QR necesitan, sin exponer funciones
+  que hoy fallarían ni abrir superficies (Server Actions, `/api/*`) que
+  escriben datos, envían correos o consumen cuota.

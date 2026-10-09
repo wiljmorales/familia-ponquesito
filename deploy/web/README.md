@@ -24,7 +24,8 @@ demás.
 - **`build-artifact.sh`** (en tu PC) construye el artefacto de un commit:
   - parte de un checkout limpio (`git worktree`) con `npm ci` y un entorno vacío;
   - exige `BUILD_ENV_FILE` con `APP_CANONICAL_URL`
-    (staging: [`staging.build.env`](staging.build.env));
+    (staging: [`staging.build.env`](staging.build.env); producción:
+    [`production.build.env`](production.build.env), lanzamiento fase 1);
   - el resultado es `ponquesito-web-<commit12>-<build12>.tar.gz` más su
     `.sha256`.
 - **`deploy-to-vps.sh`** (en tu PC) construye el artefacto, lo sube y lo

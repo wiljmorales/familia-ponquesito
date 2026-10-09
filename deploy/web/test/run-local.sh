@@ -3,7 +3,8 @@
 #
 # 1. Sintaxis de los scripts, unidad systemd y modos dry-run.
 # 2. URL canónica obligatoria e identidad del artefacto: dos builds del mismo
-#    commit (staging y otra URL ficticia) no colisionan. Contenido del artefacto.
+#    commit (staging y producción) no colisionan. Contenido de ambos: URL
+#    canónica propia, sin la de staging ni la de Vercel, y WhatsApp oficial.
 # 3. Servidor standalone en 127.0.0.1 (puerto temporal) solo con
 #    APP_CANONICAL_URL: el caso de staging sin credenciales. El release es de
 #    solo lectura; la única escritura es la caché externa.
@@ -12,7 +13,7 @@
 #
 # Uso: [ARTIFACT=<tarball> ARTIFACT2=<tarball>] deploy/web/test/run-local.sh
 # Sin ellos construye dos de HEAD con build-artifact.sh: ARTIFACT con
-# staging.build.env y ARTIFACT2 con una URL ficticia. Requiere Node de .nvmrc
+# staging.build.env y ARTIFACT2 con production.build.env. Requiere Node de .nvmrc
 # en el PATH, curl, ss y systemd-analyze.
 set -uo pipefail
 
@@ -33,9 +34,11 @@ free_port() { python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0)
 wait_http() { for _ in $(seq 60); do curl -s -o /dev/null "$1" && return 0; sleep 0.5; done; return 1; }
 NODE="$(command -v node)"
 STG=https://staging.familiaponquesito.com
-OTRA=https://otra.ponquesito.test
-# WhatsApp de staging, el de staging.build.env; el otro build va sin él.
+PROD=https://familiaponquesito.com
+OTRA=https://otra.ponquesito.test   # URL ficticia para los rechazos de release.sh
+# WhatsApp de cada build, el de su archivo de build.
 WA="$(grep -E '^NEXT_PUBLIC_WHATSAPP_URL=' "$WEB/staging.build.env" | tail -1 | cut -d= -f2-)"
+WA_PROD="$(grep -E '^NEXT_PUBLIC_WHATSAPP_URL=' "$WEB/production.build.env" | tail -1 | cut -d= -f2-)"
 fp_of() { printf 'APP_CANONICAL_URL=%s\nNEXT_PUBLIC_WHATSAPP_URL=%s\n' "$1" "${2:-}" | sha256sum | cut -c1-12; }
 
 echo "== 1. Sintaxis y dry-run"
@@ -90,14 +93,11 @@ build() {  # build <archivo-env> <variable destino>
   printf -v "$2" '%s' "$(cat "$TMP/path")"
 }
 [ -n "${ARTIFACT:-}" ] || build "$WEB/staging.build.env" ARTIFACT
-if [ -z "${ARTIFACT2:-}" ]; then
-  printf 'APP_CANONICAL_URL=%s\n' "$OTRA" > "$TMP/otra.build.env"
-  build "$TMP/otra.build.env" ARTIFACT2
-fi
-SHA="$(git rev-parse --short=12 HEAD)"; FP="$(fp_of "$STG" "$WA")"; FP2="$(fp_of "$OTRA")"
+[ -n "${ARTIFACT2:-}" ] || build "$WEB/production.build.env" ARTIFACT2
+SHA="$(git rev-parse --short=12 HEAD)"; FP="$(fp_of "$STG" "$WA")"; FP2="$(fp_of "$PROD" "$WA_PROD")"
 ID="$SHA-$FP"; ID2="$SHA-$FP2"; NAME="ponquesito-web-$ID"
 ok "nombre <commit12>-<build12> (staging)" "$NAME.tar.gz" "$(basename "$ARTIFACT")"
-ok "nombre del mismo commit con otra URL" "ponquesito-web-$ID2.tar.gz" "$(basename "$ARTIFACT2")"
+ok "nombre del mismo commit en producción" "ponquesito-web-$ID2.tar.gz" "$(basename "$ARTIFACT2")"
 ok "  no colisionan" "1" "$([ "$ID" != "$ID2" ] && [ -f "$ARTIFACT" ] && [ -f "$ARTIFACT2" ] && echo 1 || echo 0)"
 ok "sha256 del artefacto" "0" "$(cd "$(dirname "$ARTIFACT")" && sha256sum --quiet -c "$NAME.tar.gz.sha256" >/dev/null 2>&1; echo $?)"
 tar -tzf "$ARTIFACT" > "$TMP/list"
@@ -125,12 +125,25 @@ ok "REVISION = HEAD" "$(git rev-parse HEAD)" "$(cat "$X/REVISION")"
 IDX=.next/server/app/index.html
 n1() { grep -c "$1" "$2" | sed 's/^[1-9][0-9]*$/1/'; }
 ok "/ estático lleva la URL de staging" "1 0 0" \
-  "$(n1 "$STG" "$X/$IDX") $(grep -c "$OTRA" "$X/$IDX") $(grep -c 'familia-ponquesito.vercel.app' "$X/$IDX")"
-ok "/ estático del otro build lleva la otra URL" "1 0 0" \
-  "$(n1 "$OTRA" "$X2/$IDX") $(grep -c "$STG" "$X2/$IDX") $(grep -c 'familia-ponquesito.vercel.app' "$X2/$IDX")"
+  "$(n1 "$STG" "$X/$IDX") $(grep -c "$PROD" "$X/$IDX") $(grep -c 'familia-ponquesito.vercel.app' "$X/$IDX")"
+ok "/ estático de producción lleva la URL de producción" "1 0 0" \
+  "$(n1 "$PROD" "$X2/$IDX") $(grep -c "$STG" "$X2/$IDX") $(grep -c 'familia-ponquesito.vercel.app' "$X2/$IDX")"
+ok "producción: canonical de / es el apex" "<link rel=\"canonical\" href=\"$PROD\"/>" \
+  "$(grep -o '<link rel="canonical"[^>]*>' "$X2/$IDX")"
+# Metadatos de todas las páginas prerenderizadas (HTML, RSC, cabeceras).
+meta_files() { find "$1/.next/server/app" -type f \( -name '*.html' -o -name '*.rsc' -o -name '*.meta' -o -name '*.body' \); }
+ok "producción: metadatos revisados (>10) y con el apex (>0)" "1 1" \
+  "$([ "$(meta_files "$X2" | wc -l)" -gt 10 ] && echo 1 || echo 0) $([ "$(meta_files "$X2" | xargs grep -lF "$PROD" | wc -l)" -gt 0 ] && echo 1 || echo 0)"
+ok "producción: ningún metadato con staging, Vercel u otra URL" "0 0 0" \
+  "$(meta_files "$X2" | xargs grep -lF "$STG" | wc -l) $(meta_files "$X2" | xargs grep -lF 'vercel.app' | wc -l) $(meta_files "$X2" | xargs grep -lF "$OTRA" | wc -l)"
+ok "producción: identidad propia" "commit=$(git rev-parse HEAD) canonical_url=$PROD build_fingerprint=$FP2" \
+  "$(grep -E '^(commit|canonical_url|build_fingerprint)=' "$X2/BUILD_INFO" | tr '\n' ' ' | sed 's/ $//')"
+ok "producción: BUILD_ENV" "APP_CANONICAL_URL=$PROD NEXT_PUBLIC_WHATSAPP_URL=$WA_PROD" "$(tr '\n' ' ' < "$X2/BUILD_ENV" | sed 's/ $//')"
+ok "producción: /linktree idéntico al de staging" "$(sha256sum < "$X/public/linktree.html")" "$(sha256sum < "$X2/public/linktree.html")"
 # NEXT_PUBLIC_WHATSAPP_URL se graba en el bundle del navegador.
-ok "WhatsApp en el bundle: staging sí, otro build no" "1 0" \
-  "$(grep -rlF "$WA" "$X/.next/static" | head -1 | wc -l) $(grep -rlF 'wa.me/' "$X2/.next/static" | wc -l)"
+ok "WhatsApp de producción = el oficial" "https://wa.me/584248532526" "$WA_PROD"
+ok "WhatsApp oficial en el bundle de staging y de producción" "1 1" \
+  "$(grep -rlF "$WA" "$X/.next/static" | head -1 | wc -l) $(grep -rlF "$WA_PROD" "$X2/.next/static" | head -1 | wc -l)"
 echo "  tamaño: $(du -h "$ARTIFACT" | cut -f1) comprimido, $(du -sh "$X" | cut -f1) extraído"
 VPS_HOST=admin@host.invalid ARTIFACT="$ARTIFACT" DRY_RUN=1 "$WEB/deploy-to-vps.sh" > "$TMP/dry.log" 2>&1
 ok "deploy DRY_RUN=1 termina sin conectar" "0 1 1" \

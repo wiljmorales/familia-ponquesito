@@ -1,0 +1,29 @@
+# /etc/caddy/Caddyfile — LANZAMIENTO FASE 1 (2026-10-09; preparado, NO
+# instalado). El dominio principal solo publica la página de enlaces de los
+# QR (https://familiaponquesito.com/linktree). Sin staging público: staging
+# se revisa por túnel SSH. Ver deploy/caddy/README.md y docs/decisions.md.
+{
+	# Solo HTTP/1.1 y HTTP/2: no se abre 443/udp.
+	servers {
+		protocols h1 h2
+	}
+}
+
+import /etc/caddy/ponquesito.caddy
+
+familiaponquesito.com {
+	log
+	import ponquesito_cabeceras
+	route {
+		import ponquesito_fase1 127.0.0.1:8000 127.0.0.1:3000
+	}
+	# Next.js caído o reiniciándose: respuesta clara en vez de un 502.
+	handle_errors 502 {
+		respond "Servicio no disponible temporalmente" 503
+	}
+}
+
+# www → apex conservando ruta y parámetros.
+www.familiaponquesito.com {
+	redir https://familiaponquesito.com{uri} 301
+}
