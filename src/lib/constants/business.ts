@@ -6,7 +6,30 @@
 
 export const BUSINESS_NAME = "Familia Ponquesito";
 export const SLOGAN = "Hecho con amor, para compartir.";
+/** Zona de cobertura principal del delivery (no es la dirección del local). */
 export const LOCATION_LABEL = "Este de Barquisimeto, Venezuela";
+
+/**
+ * Local físico, confirmado en octubre de 2026 (ver docs/decisions.md). Es la
+ * dirección de public/linktree.html; src/lib/location-official.test.ts
+ * comprueba que el Linktree, esta constante y la base de conocimiento
+ * coincidan.
+ */
+export const BUSINESS_ADDRESS = {
+  street: "Carrera 19 entre calles 8 y 9",
+  reference: "detrás del Rectorado de la UCLA",
+  city: "Barquisimeto",
+  region: "Lara",
+  country: "Venezuela",
+} as const;
+
+export const BUSINESS_ADDRESS_TEXT = [
+  BUSINESS_ADDRESS.street,
+  BUSINESS_ADDRESS.reference,
+  BUSINESS_ADDRESS.city,
+  BUSINESS_ADDRESS.region,
+  BUSINESS_ADDRESS.country,
+].join(", ");
 
 export const INSTAGRAM_HANDLE = "@familiaponquesito";
 export const INSTAGRAM_URL = "https://www.instagram.com/familiaponquesito";

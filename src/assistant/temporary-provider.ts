@@ -1,3 +1,4 @@
+import { BUSINESS_ADDRESS } from "@/lib/constants/business";
 import type {
   AssistantProvider,
   AssistantReply,
@@ -11,7 +12,9 @@ import type {
  * - Nunca inventa productos, precios, sabores, horarios, zonas, pagos ni
  *   políticas: la base de conocimiento real está en construcción
  *   (docs/familia-ponquesito-discovery.md sigue pendiente de respuestas).
- * - Toda pregunta sobre datos del negocio devuelve "unknown".
+ * - Toda pregunta sobre datos del negocio devuelve "unknown", salvo la
+ *   ubicación del local, confirmada en octubre de 2026 (BUSINESS_ADDRESS):
+ *   solo la dirección, sin horarios ni servicios del local.
  * - La intención de pedir o hablar con alguien devuelve "human_required".
  * - Solo responde "answered" sobre sí mismo (qué es y cómo funciona).
  */
@@ -94,7 +97,20 @@ const BUSINESS_DATA_KEYWORDS = [
   "personalizad",
 ];
 
-/** Preguntas sobre el propio asistente: lo único que sí puede responder. */
+/** Preguntas por la ubicación del local (van antes que BUSINESS_DATA_KEYWORDS). */
+const LOCATION_KEYWORDS = [
+  "ubicad",
+  "ubicacion",
+  "direccion",
+  "local",
+  "donde estan",
+  "donde queda",
+  "donde se encuentran",
+  "como llego",
+  "como llegar",
+];
+
+/** Preguntas sobre el propio asistente. */
 const META_KEYWORDS = [
   "hola",
   "buenas",
@@ -129,6 +145,11 @@ const REPLY_META =
   "lo que sé, admito lo que no sé y te aviso cuándo conviene hablar con " +
   "una persona.";
 
+const REPLY_LOCATION =
+  `Sí, Familia Ponquesito tiene local físico: ${BUSINESS_ADDRESS.street}, ` +
+  `${BUSINESS_ADDRESS.reference}, en ${BUSINESS_ADDRESS.city}, ` +
+  `${BUSINESS_ADDRESS.region}, ${BUSINESS_ADDRESS.country}.`;
+
 function includesAny(text: string, keywords: string[]): boolean {
   return keywords.some((keyword) => text.includes(keyword));
 }
@@ -140,6 +161,10 @@ export const temporaryProvider: AssistantProvider = async (
 
   if (includesAny(text, HUMAN_INTENT_KEYWORDS)) {
     return { status: "human_required", reply: REPLY_HUMAN_REQUIRED };
+  }
+
+  if (includesAny(text, LOCATION_KEYWORDS)) {
+    return { status: "answered", reply: REPLY_LOCATION };
   }
 
   if (includesAny(text, BUSINESS_DATA_KEYWORDS)) {

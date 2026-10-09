@@ -220,7 +220,7 @@ export default function DesignRequestForm({ design, onRestart }: DesignRequestFo
         label="Correo"
         required
         type="email"
-        placeholder="tucorreo@ejemplo.com"
+        placeholder="Tu correo electrónico"
         autoComplete="email"
         hint="Te enviaremos la confirmación de tu diseño aquí."
         error={errors.email?.message}

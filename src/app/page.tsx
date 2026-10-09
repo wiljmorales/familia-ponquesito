@@ -8,7 +8,7 @@ import Flavors from "@/components/sections/Flavors";
 import Conditions from "@/components/sections/Conditions";
 import RequestForm from "@/components/sections/RequestForm";
 import ClosingSection from "@/components/sections/ClosingSection";
-import { INSTAGRAM_URL, LOCATION_LABEL } from "@/lib/constants/business";
+import { BUSINESS_ADDRESS, INSTAGRAM_URL, LOCATION_LABEL } from "@/lib/constants/business";
 
 const STRUCTURED_DATA = {
   "@context": "https://schema.org",
@@ -16,6 +16,13 @@ const STRUCTURED_DATA = {
   name: "Familia Ponquesito",
   description:
     "Tortas personalizadas para cumpleaños y celebraciones en Barquisimeto, Venezuela.",
+  address: {
+    "@type": "PostalAddress",
+    streetAddress: `${BUSINESS_ADDRESS.street}, ${BUSINESS_ADDRESS.reference}`,
+    addressLocality: BUSINESS_ADDRESS.city,
+    addressRegion: BUSINESS_ADDRESS.region,
+    addressCountry: "VE",
+  },
   areaServed: LOCATION_LABEL,
   sameAs: [INSTAGRAM_URL],
   slogan: "Hecho con amor, para compartir.",

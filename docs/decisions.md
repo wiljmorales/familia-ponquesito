@@ -501,3 +501,39 @@ en julio.
 - **Regresión**: `src/lib/whatsapp-official.test.ts` falla si el número del
   botón de `/linktree`, `staging.build.env`, `.env.example` o la base de
   conocimiento dejan de coincidir.
+
+## 2026-10-09 — Local físico confirmado: Carrera 19 entre calles 8 y 9
+
+Sustituye el dato de julio de 2026 de la base de conocimiento ("No hay
+local físico por ahora", con operación desde Las Trinitarias). Ese dato era
+cierto entonces y queda en la base de conocimiento solo como historia,
+marcado como obsoleto.
+
+- **Confirmación**: el equipo del proyecto confirmó en octubre de 2026 que
+  Familia Ponquesito tiene local físico en la **Carrera 19 entre calles 8
+  y 9, detrás del Rectorado de la UCLA, Barquisimeto, Lara, Venezuela**. Es
+  la dirección de la página de enlaces (`public/linktree.html`, `/linktree`),
+  que no cambia.
+- **Fuente única en el código**: `BUSINESS_ADDRESS` en
+  `src/lib/constants/business.ts`. Se usa en:
+  - los datos estructurados (`PostalAddress`) de `/`;
+  - el asistente determinista, que responde "¿Dónde están ubicados?" y
+    "¿Tienen local físico?" con la dirección y nada más. Las demás
+    preguntas sobre el negocio siguen recibiendo "unknown".
+- **Base de conocimiento**: la dirección figura como vigente, con dos
+  preguntas frecuentes nuevas. La dirección del local deja de estar entre
+  la información que no se comparte; las direcciones particulares siguen
+  ahí.
+- **Sin cambios**: la zona de cobertura del delivery (este de Barquisimeto,
+  incluida Las Trinitarias como urbanización atendida) y `LOCATION_LABEL`,
+  que es esa zona y no la dirección del local. No se añadieron horarios,
+  servicios del local ni condiciones de retiro que no estén confirmados.
+- **Placeholders**: los campos de correo de `/`, `/crea-tu-torta` y
+  `/agenda` decían `tucorreo@ejemplo.com`; ahora dicen "Tu correo
+  electrónico", sin dirección de ejemplo visible.
+- **Regresión**: `src/lib/location-official.test.ts` falla si:
+  - la dirección del Linktree, `BUSINESS_ADDRESS` y la base de conocimiento
+    divergen;
+  - la base de conocimiento vuelve a dar como vigente que no hay local;
+  - el asistente determinista deja de responder con la dirección;
+  - reaparece una dirección de correo de ejemplo en la interfaz.

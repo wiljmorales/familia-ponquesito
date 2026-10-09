@@ -695,7 +695,7 @@ export default function AgendaWizard() {
               label="Correo"
               required
               type="email"
-              placeholder="tucorreo@ejemplo.com"
+              placeholder="Tu correo electrónico"
               autoComplete="email"
               hint="Aquí te enviaremos la confirmación."
               error={contactForm.formState.errors.email?.message}

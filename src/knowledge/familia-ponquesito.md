@@ -2,7 +2,8 @@
 
 Fuente: respuestas de Karem al cuestionario de descubrimiento (2026-07-11)
 y respuestas directas del equipo del proyecto (mismo día). El WhatsApp
-oficial lo confirmó el equipo del proyecto en octubre de 2026. Este archivo es la
+oficial y el local físico los confirmó el equipo del proyecto en octubre de
+2026. Este archivo es la
 **única fuente de verdad** del asistente: lo que no esté aquí como
 confirmado, el asistente debe admitir que no lo sabe.
 
@@ -15,8 +16,12 @@ confirmado, el asistente debe admitir que no lo sabe.
 - Detrás está **Karem, chef internacional en repostería y pastelería**,
   junto a su esposo y su hija.
 - El nombre nace del apodo cariñoso de la familia a su hija: "ponquesito".
-- **No hay local físico por ahora.** El negocio opera desde Las
-  Trinitarias, en el este de Barquisimeto.
+- **Local físico:** Carrera 19 entre calles 8 y 9, detrás del Rectorado
+  de la UCLA, Barquisimeto, Lara, Venezuela. Es la dirección vigente,
+  confirmada en octubre de 2026.
+  - *Historia:* en julio de 2026 no había local físico y el negocio operaba
+    desde Las Trinitarias. Ese dato quedó obsoleto en octubre de 2026; no
+    debe darse como respuesta.
 
 ### Productos y sabores
 
@@ -126,15 +131,18 @@ en el formato en que los clientes suelen preguntar.
 - **¿Qué días atienden?** Se reciben pedidos y se entregan todos los
   días. El horario de recepción de pedidos es desde la mañana hasta las
   9:00 pm.
-- **¿Tienen local físico?** Por ahora no; operamos desde Las Trinitarias
-  (este de Barquisimeto) con delivery y retiro.
+- **¿Dónde están ubicados?** En la Carrera 19 entre calles 8 y 9, detrás
+  del Rectorado de la UCLA, Barquisimeto, Lara, Venezuela.
+- **¿Tienen local físico?** Sí, en la Carrera 19 entre calles 8 y 9,
+  detrás del Rectorado de la UCLA, Barquisimeto.
 
 ## Pendiente (sin datos — el asistente debe decir que no lo sabe)
 
 - Ingredientes, alérgenos y opciones especiales (sin azúcar, veganas, etc.).
 - Preguntas frecuentes **reales de clientes** (capturas de WhatsApp o
   Instagram) para contrastar con el FAQ derivado de arriba.
-- Información privada que nunca debe compartirse (dirección exacta, datos
-  personales) — por definir explícitamente; mientras tanto, no dar
-  direcciones exactas.
+- Información privada que nunca debe compartirse (datos personales,
+  direcciones particulares) — por definir explícitamente. La dirección del
+  local es pública desde octubre de 2026 y sí se puede dar; cualquier otra
+  dirección, no.
 - Horario más preciso que "desde la mañana" para el inicio de atención.
