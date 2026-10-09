@@ -29,6 +29,14 @@ FULL_SHA="$(git rev-parse --verify "$REF^{commit}")"
 SHA="${FULL_SHA:0:12}"
 NODE_WANT="$(git show "$FULL_SHA:.nvmrc" | tr -d '[:space:]')"
 
+# Node debe ser exactamente el de .nvmrc del commit (el del VPS se comprueba
+# al activar). Va primero: el resto del script ya usa node.
+NODE_HAVE="$(node --version 2>/dev/null | sed 's/^v//')" || true
+if [ "$NODE_HAVE" != "$NODE_WANT" ]; then
+  echo "Node $NODE_WANT requerido (.nvmrc); en el PATH hay '${NODE_HAVE:-ninguno}'. Ejecuta: nvm use" >&2
+  exit 1
+fi
+
 # Variables de build: solo las permitidas, desde un archivo explícito.
 ENV_FILE_IN="${BUILD_ENV_FILE:?Define BUILD_ENV_FILE (staging: deploy/web/staging.build.env)}"
 [ -f "$ENV_FILE_IN" ] || { echo "No existe $ENV_FILE_IN" >&2; exit 1; }
@@ -58,12 +66,6 @@ fi
 FP="$(printf '%s' "$BUILD_ENV_TEXT" | sha256sum | cut -c1-12)"
 ID="$SHA-$FP"
 
-# Node debe ser exactamente el de .nvmrc (el del VPS se comprueba al activar).
-NODE_HAVE="$(node --version 2>/dev/null | sed 's/^v//')" || true
-if [ "$NODE_HAVE" != "$NODE_WANT" ]; then
-  echo "Node $NODE_WANT requerido (.nvmrc); en el PATH hay '${NODE_HAVE:-ninguno}'. Ejecuta: nvm use" >&2
-  exit 1
-fi
 
 # Ruta de build fija y neutra: Next.js graba la ruta absoluta del proyecto en
 # server.js; así no contiene el usuario ni el directorio local.

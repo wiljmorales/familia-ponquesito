@@ -94,17 +94,41 @@ Detalle en [`.env.example`](.env.example).
 
 ## Prerrequisitos en el VPS
 
-- **Node exacto de `.nvmrc`** en `/opt/ponquesito/node/bin/node`:
+- **Node exacto de `.nvmrc` (22.23.3 LTS)** en `/opt/ponquesito/node/bin/node`:
   - es el binario oficial de nodejs.org para linux-x64;
   - se instala a mano, sin `curl | bash` ni gestores de versiones;
-  - antes de instalarlo, verifica el `.tar.xz` contra `SHASUMS256.txt` y la
-    firma de ese archivo con las claves publicadas por el proyecto Node.js.
+  - `/opt/ponquesito/node` es un symlink estable al directorio de la versión:
+    la unidad no cambia al actualizar Node;
+  - antes de instalarlo, se verifica la firma de `SHASUMS256.txt` con las
+    claves de los releasers de Node.js
+    ([nodejs/release-keys](https://github.com/nodejs/release-keys)) y el
+    `.tar.xz` contra ese archivo.
 
+  En tu PC, en un directorio vacío:
   ```
-  sudo tar -xJf node-v<versión>-linux-x64.tar.xz -C /opt/ponquesito
-  sudo ln -sfn node-v<versión>-linux-x64 /opt/ponquesito/node
-  /opt/ponquesito/node/bin/node --version
+  V=v22.23.3
+  curl -fO https://nodejs.org/dist/$V/node-$V-linux-x64.tar.xz
+  curl -fO https://nodejs.org/dist/$V/SHASUMS256.txt
+  curl -fO https://nodejs.org/dist/$V/SHASUMS256.txt.sig
+  curl -fL -o pubring.kbx https://github.com/nodejs/release-keys/raw/HEAD/gpg-only-active-keys/pubring.kbx
+  gpgv --keyring ./pubring.kbx SHASUMS256.txt.sig SHASUMS256.txt   # "Good signature"
+  grep " node-$V-linux-x64.tar.xz\$" SHASUMS256.txt | sha256sum -c
   ```
+  Súbelos (sin sudo) y vuelve a comprobar el SHA-256 en el VPS:
+  ```
+  scp node-v22.23.3-linux-x64.tar.xz SHASUMS256.txt <admin>@<host>:ponquesito-web-setup/
+  ssh <admin>@<host> 'cd ~/ponquesito-web-setup && grep " node-v22.23.3-linux-x64.tar.xz$" SHASUMS256.txt | sha256sum -c'
+  ```
+  Instálalo (sudo):
+  ```
+  sudo install -d -o root -g root -m 755 /opt/ponquesito
+  sudo tar --no-same-owner -xJf ~/ponquesito-web-setup/node-v22.23.3-linux-x64.tar.xz -C /opt/ponquesito
+  sudo ln -sfn node-v22.23.3-linux-x64 /opt/ponquesito/node
+  /opt/ponquesito/node/bin/node --version    # v22.23.3
+  ```
+  Para cambiar de versión, se instala la nueva junto a la anterior y se mueve
+  el symlink. Los releases construidos con otra versión no se activan
+  (`release.sh` compara `NODE_VERSION`).
 - **Arquitectura:** el artefacto trae `sharp` para linux x64 (glibc y musl),
   así que el VPS debe ser x86_64. Si fuera ARM, habría que compilar en ARM.
 - **Herramientas:** `curl`, `ss`, `tar` y `sha256sum` (vienen con Ubuntu).

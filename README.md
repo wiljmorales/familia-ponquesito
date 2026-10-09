@@ -134,7 +134,7 @@ importantes de los cuatro retos y sus motivos están en
 
 ## Correr en local
 
-Requiere Node ≥ 20.9 (hay `.nvmrc` con 22.14.0).
+Requiere Node ≥ 20.9 (hay `.nvmrc` con 22.23.3).
 
 ```bash
 nvm use

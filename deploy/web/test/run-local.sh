@@ -72,6 +72,12 @@ bad_build "con barra final" "APP_CANONICAL_URL=$STG/"
 bad_build "con ruta" "APP_CANONICAL_URL=$STG/x"
 bad_build "con credenciales" "APP_CANONICAL_URL=https://u:p@staging.familiaponquesito.com"
 bad_build "con espacio" "APP_CANONICAL_URL=$STG x"
+# Un Node distinto del de .nvmrc (p. ej. el anterior, 22.14.0) no compila.
+mkdir -p "$TMP/oldnode"; printf '#!/bin/sh\necho v22.14.0\n' > "$TMP/oldnode/node"; chmod +x "$TMP/oldnode/node"
+(cd "$ROOT" && PATH="$TMP/oldnode:$PATH" BUILD_ENV_FILE="$WEB/staging.build.env" OUT_DIR="$TMP/out-bad" \
+  "$WEB/build-artifact.sh" HEAD) >"$TMP/bad.log" 2>&1
+ok "build con Node 22.14.0 → rechazo sin compilar" "1 sí no" \
+  "$? $(grep -q "Node $(tr -d '[:space:]' < "$ROOT/.nvmrc") requerido" "$TMP/bad.log" && echo sí || echo no) $([ -e "$TMP/out-bad" ] && echo sí || echo no)"
 ok "  ningún worktree de build quedó creado" "$WT_BEFORE" "$(git worktree list | wc -l)"
 ok "next.config exige la URL en standalone" "1" "$(cd "$ROOT" && env -u APP_CANONICAL_URL PONQUESITO_STANDALONE=1 \
   node --experimental-strip-types -e 'import("./next.config.ts").then(()=>console.log(0),e=>console.log(/APP_CANONICAL_URL/.test(e.message)?1:2))' 2>/dev/null)"
@@ -151,8 +157,18 @@ ok "/ servido con la URL de staging, sin la de Vercel" "1 0" \
   "$(n1 "$STG" "$TMP/home.html") $(grep -c 'familia-ponquesito.vercel.app' "$TMP/home.html")"
 CHUNK="$(grep -o '/_next/static/[^"]*\.js' "$TMP/home.html" | head -1)"
 ok "estático $CHUNK" "200" "$(code "$B$CHUNK")"
-ok "imagen optimizada (/_next/image)" "200" "$(code "$B/_next/image?url=%2Fimages%2Fclosing%2Fclosing-bg.jpg&w=640&q=75")"
+# Optimizada de verdad: WebP y más pequeña que el JPEG original.
+ok "imagen optimizada (/_next/image → WebP)" "200 image/webp 1" "$(curl -s -o "$TMP/img" -H 'Accept: image/webp,*/*' \
+  -w '%{http_code} %{content_type}' "$B/_next/image?url=%2Fimages%2Fclosing%2Fclosing-bg.jpg&w=640&q=75") \
+$([ "$(stat -c %s "$TMP/img")" -lt "$(stat -c %s "$REL/public/images/closing/closing-bg.jpg")" ] && echo 1 || echo 0)"
 ok "la caché de imágenes se escribe fuera del release" "1" "$([ -n "$(find "$TMP/cache/images" -type f 2>/dev/null | head -1)" ] && echo 1 || echo 0)"
+# sharp se resuelve como lo hace Next.js (desde next/dist/server): el paquete
+# de primer nivel es solo el resto trazado de una devDependency.
+ok "sharp de Next.js carga y convierte con este Node" "ok" "$(cd "$REL" && "$NODE" -e '
+  const s=require(require.resolve("sharp",{paths:[process.cwd()+"/node_modules/next/dist/server"]}));
+  s({create:{width:4,height:4,channels:3,background:"#fff"}}).webp().toBuffer()
+    .then(b=>console.log(b.length>0?"ok":"vacío"),e=>console.log("error: "+e.message))' 2>&1)"
+ok "Node del servidor = NODE_VERSION" "$(cat "$REL/NODE_VERSION")" "$("$NODE" --version | sed 's/^v//')"
 ok "escucha solo en 127.0.0.1" "127.0.0.1:$P" "$(ss -Hltn "sport = :$P" | awk '{print $4}' | sort -u | tr '\n' ' ' | sed 's/ $//')"
 for p in /prototipo /reporte-semanal; do echo "  info GET $p → $(code "$B$p")"; done
 ok "sin errores en el log del servidor" "" "$(grep -iE 'error|EACCES|EROFS|unhandled' "$TMP/server.log" \
@@ -198,6 +214,7 @@ variant() {  # variant <commit12> <modo>
     enlace) ln -s /etc/passwd "$d/$n/public/enlace" ;;
     build_env) sed -i 's#^NEXT_PUBLIC_WHATSAPP_URL=.*#NEXT_PUBLIC_WHATSAPP_URL=https://wa.me/000#' "$d/$n/BUILD_ENV" ;;
     build_info) sed -i "s#^canonical_url=.*#canonical_url=$OTRA#" "$d/$n/BUILD_INFO" ;;
+    node2214) echo 22.14.0 > "$d/$n/NODE_VERSION"; sed -i 's/^node=.*/node=22.14.0/' "$d/$n/BUILD_INFO" ;;
   esac
   tar -C "$d" -czf "$TMP/v/$n.tar.gz" "$n"
   (cd "$TMP/v" && sha256sum "$n.tar.gz" > "$n.tar.gz.sha256")
@@ -249,6 +266,9 @@ ok "web.env con HOSTNAME → rechazo" "1" "$(run activate "$ID")"
 web_env "APP_CANONICAL_URL=$STG"
 printf '#!/bin/sh\necho v18.19.1\n' > "$TMP/node18"; chmod +x "$TMP/node18"
 ok "Node distinto de .nvmrc → rechazo" "1" "$(NODE_BIN="$TMP/node18" run activate "$ID")"
+ok "artefacto construido con Node 22.14.0 → rechazo" "1 sí" \
+  "$(run deploy "$(variant f1eeeeeeeeee node2214)") $(said 'el release requiere Node 22.14.0')"
+ok "  no se instaló" "" "$(ls -A "$WEB_ROOT/releases" | grep -E 'f1ee|incoming')"
 
 echo "-- URL canónica de runtime (web.env) frente a la del build"
 web_env

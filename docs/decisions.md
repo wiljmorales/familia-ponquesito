@@ -49,7 +49,7 @@ real, nunca antes.
   inventar), no el renderizado. Config en `vitest.config.mts` (extensión
   `.mts` porque `vite-tsconfig-paths` v6 es solo ESM).
 - **Nota de entorno**: el build requiere Node ≥ 20.9 (el `.nvmrc` pide
-  22.14.0; usar `nvm use` antes de `npm run build`).
+  22.23.3; usar `nvm use` antes de `npm run build`).
 
 ## 2026-07-11 — Nace `src/knowledge/` con las primeras respuestas reales
 
