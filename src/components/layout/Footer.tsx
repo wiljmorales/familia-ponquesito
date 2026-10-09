@@ -1,6 +1,12 @@
 import Image from "next/image";
 import { LocationIcon } from "@/components/ui/icons";
-import { INSTAGRAM_HANDLE, INSTAGRAM_URL } from "@/lib/constants/business";
+import {
+  INSTAGRAM_HANDLE,
+  INSTAGRAM_URL,
+  ORDER_WHATSAPP_MESSAGE,
+  WHATSAPP_URL,
+} from "@/lib/constants/business";
+import { buildWhatsappMessageUrl } from "@/lib/utils/whatsapp";
 
 /*
  * lucide-react ya no incluye logos de marcas (Instagram) por temas de
@@ -12,6 +18,25 @@ function InstagramIcon() {
       <rect x="3" y="3" width="18" height="18" rx="5" />
       <circle cx="12" cy="12" r="4" />
       <circle cx="17.2" cy="6.8" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+/* Burbuja de chat, el mismo trazo que el botón de WhatsApp de /linktree. */
+function WhatsappIcon() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      className="size-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.9}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.4 9.4 0 0 1-3.9-.9L3 21l1.8-4.8a8.5 8.5 0 1 1 16.2-4.7Z" />
+      <path d="M8.6 8.3c.2 2.9 2.2 5.2 5.1 6.2l1.4-1.5 2 .6" />
     </svg>
   );
 }
@@ -54,6 +79,19 @@ export default function Footer() {
           <InstagramIcon />
           Instagram
         </a>
+
+        {WHATSAPP_URL && (
+          <a
+            href={buildWhatsappMessageUrl(WHATSAPP_URL, ORDER_WHATSAPP_MESSAGE)}
+            target="_blank"
+            rel="noreferrer noopener"
+            aria-label="WhatsApp de Familia Ponquesito"
+            className="flex items-center gap-1.5 text-sm text-cocoa transition-colors hover:text-terracotta"
+          >
+            <WhatsappIcon />
+            WhatsApp
+          </a>
+        )}
       </div>
 
       <div className="mx-auto max-w-6xl px-4 pb-6 sm:px-6 lg:px-8">

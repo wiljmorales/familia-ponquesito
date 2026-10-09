@@ -1,7 +1,8 @@
 # Base de conocimiento — Familia Ponquesito
 
 Fuente: respuestas de Karem al cuestionario de descubrimiento (2026-07-11)
-y respuestas directas del equipo del proyecto (mismo día). Este archivo es la
+y respuestas directas del equipo del proyecto (mismo día). El WhatsApp
+oficial lo confirmó el equipo del proyecto en octubre de 2026. Este archivo es la
 **única fuente de verdad** del asistente: lo que no esté aquí como
 confirmado, el asistente debe admitir que no lo sabe.
 
@@ -81,8 +82,12 @@ confirmado, el asistente debe admitir que no lo sabe.
 
 ### Contacto
 
-- Canal para pedidos y atención: **Instagram
-  [@familiaponquesito](https://www.instagram.com/familiaponquesito)**.
+- Canales oficiales para pedidos y atención:
+  - **WhatsApp +58 424-8532526**
+    ([wa.me/584248532526](https://wa.me/584248532526)), confirmado en
+    octubre de 2026;
+  - **Instagram
+    [@familiaponquesito](https://www.instagram.com/familiaponquesito)**.
 
 ### Tono de marca
 
@@ -103,9 +108,9 @@ en el formato en que los clientes suelen preguntar.
   cotizan según el diseño.
 - **¿Con cuánta anticipación debo pedir?** Mínimo 3 días. No se aceptan
   pedidos para el mismo día.
-- **¿Cómo hago un pedido?** Escríbanos por Instagram
-  (@familiaponquesito) con: fecha, hora, cantidad de personas, sabor,
-  diseño, dirección y método de pago.
+- **¿Cómo hago un pedido?** Escríbanos por WhatsApp (+58 424-8532526) o
+  por Instagram (@familiaponquesito) con: fecha, hora, cantidad de
+  personas, sabor, diseño, dirección y método de pago.
 - **¿Cómo se paga?** 50% al reservar y 50% en la entrega (antes de enviar
   el delivery o al retirar). Aceptamos Pago Móvil, transferencia
   bancaria, efectivo, Binance y Mercantil Panamá.

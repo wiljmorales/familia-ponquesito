@@ -471,3 +471,33 @@ incluyendo la combinación exacta reportada.
   sin `agent_decisions` en Supabase la demo degrada honestamente (sin
   correos). Pendiente: aplicar `supabase/schema.sql` en el SQL Editor del
   proyecto real y verificar el caso 1 completo.
+
+## 2026-10-09 — WhatsApp oficial confirmado: +58 424-8532526
+
+Resuelve la pregunta pendiente del Reto 2 ("WhatsApp de negocio no
+confirmado", 2026-07-12). Esa entrada se conserva tal cual porque era cierta
+en julio.
+
+- **Confirmación**: el equipo del proyecto confirmó en octubre de 2026 que
+  **+58 424-8532526** es el canal oficial de Familia Ponquesito. Es el mismo
+  número del botón "Pedir por WhatsApp" de la página de enlaces publicada
+  (`public/linktree.html`, servida en `/linktree` y destinada a los QR
+  impresos).
+- **Configuración**: `NEXT_PUBLIC_WHATSAPP_URL=https://wa.me/584248532526`,
+  sin mensaje, porque `buildWhatsappMessageUrl` añade el suyo y un `?text=`
+  en la base produciría dos. Es pública: se graba en el bundle al compilar.
+  - Staging del VPS: `deploy/web/staging.build.env`, que forma parte de la
+    identidad del artefacto (`BUILD_ENV`).
+  - Desarrollo local: `.env.example`.
+  - Vercel: se configura aparte en el panel del proyecto, si se desea.
+- **Efecto**:
+  - El footer de `/` muestra el enlace de WhatsApp con el mismo mensaje de
+    pedido que `/linktree`. Antes el footer no tenía el enlace aunque la
+    documentación lo daba por hecho.
+  - `/crea-tu-torta` muestra "Continuar por WhatsApp" al guardar un diseño.
+  - `/linktree` no cambia: sus tres botones están escritos en el HTML.
+- **Base de conocimiento**: WhatsApp e Instagram figuran como canales
+  oficiales.
+- **Regresión**: `src/lib/whatsapp-official.test.ts` falla si el número del
+  botón de `/linktree`, `staging.build.env`, `.env.example` o la base de
+  conocimiento dejan de coincidir.

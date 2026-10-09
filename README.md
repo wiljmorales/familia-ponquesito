@@ -151,8 +151,10 @@ cada una):
 - `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — necesarias para
   que el formulario de la landing guarde datos de verdad (ver sección de
   Supabase arriba).
-- `NEXT_PUBLIC_WHATSAPP_URL` — opcional; sin ella, el footer no muestra el
-  enlace de WhatsApp (no hay número de negocio confirmado todavía).
+- `NEXT_PUBLIC_WHATSAPP_URL` — WhatsApp oficial del negocio,
+  `https://wa.me/584248532526` (confirmado en octubre de 2026). Se graba al
+  compilar. Sin ella no se muestran el enlace del footer ni "Continuar por
+  WhatsApp" en `/crea-tu-torta`.
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`,
   `SMTP_APP_PASSWORD`, `EMAIL_FROM`, `KAREM_NOTIFICATION_EMAIL` —
   necesarias para que la automatización de leads (Reto 4) envíe correos

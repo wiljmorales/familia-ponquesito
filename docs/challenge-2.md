@@ -32,6 +32,9 @@ A partir del enunciado del reto, la landing debe:
   lado. El footer deja el enlace de WhatsApp detrás de la variable de
   entorno `NEXT_PUBLIC_WHATSAPP_URL`: si no está definida, el ícono
   simplemente no se muestra (no se inventa ni se deja un enlace roto).
+  *Actualización (octubre de 2026):* resuelta. El equipo confirmó
+  +58 424-8532526 como WhatsApp oficial; ver la entrada del 2026-10-09 en
+  `docs/decisions.md`.
 - **Fotografías de corte por sabor.** Para la sección "Sabores" no existen
   fotos reales de vainilla, red velvet o tres leches en corte (solo se
   cuenta con fotos de tortas decoradas completas). Como está prohibido usar

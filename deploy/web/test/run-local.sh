@@ -34,7 +34,9 @@ wait_http() { for _ in $(seq 60); do curl -s -o /dev/null "$1" && return 0; slee
 NODE="$(command -v node)"
 STG=https://staging.familiaponquesito.com
 OTRA=https://otra.ponquesito.test
-fp_of() { printf 'APP_CANONICAL_URL=%s\nNEXT_PUBLIC_WHATSAPP_URL=\n' "$1" | sha256sum | cut -c1-12; }
+# WhatsApp de staging, el de staging.build.env; el otro build va sin él.
+WA="$(grep -E '^NEXT_PUBLIC_WHATSAPP_URL=' "$WEB/staging.build.env" | tail -1 | cut -d= -f2-)"
+fp_of() { printf 'APP_CANONICAL_URL=%s\nNEXT_PUBLIC_WHATSAPP_URL=%s\n' "$1" "${2:-}" | sha256sum | cut -c1-12; }
 
 echo "== 1. Sintaxis y dry-run"
 for f in "$WEB"/*.sh "$WEB"/test/*.sh; do
@@ -92,7 +94,7 @@ if [ -z "${ARTIFACT2:-}" ]; then
   printf 'APP_CANONICAL_URL=%s\n' "$OTRA" > "$TMP/otra.build.env"
   build "$TMP/otra.build.env" ARTIFACT2
 fi
-SHA="$(git rev-parse --short=12 HEAD)"; FP="$(fp_of "$STG")"; FP2="$(fp_of "$OTRA")"
+SHA="$(git rev-parse --short=12 HEAD)"; FP="$(fp_of "$STG" "$WA")"; FP2="$(fp_of "$OTRA")"
 ID="$SHA-$FP"; ID2="$SHA-$FP2"; NAME="ponquesito-web-$ID"
 ok "nombre <commit12>-<build12> (staging)" "$NAME.tar.gz" "$(basename "$ARTIFACT")"
 ok "nombre del mismo commit con otra URL" "ponquesito-web-$ID2.tar.gz" "$(basename "$ARTIFACT2")"
@@ -115,7 +117,8 @@ X="$TMP/x/$NAME"; X2="$TMP/x2/ponquesito-web-$ID2"
 ok "sin rutas locales" "" "$(grep -rlIF -e "$HOME" -e "$ROOT" "$TMP/x" "$TMP/x2" | head -3)"
 ok "BUILD_INFO" "commit=$(git rev-parse HEAD) node=$(tr -d '[:space:]' < "$ROOT/.nvmrc") canonical_url=$STG build_fingerprint=$FP" \
   "$(tr '\n' ' ' < "$X/BUILD_INFO" | sed 's/ $//')"
-ok "BUILD_ENV solo variables de build" "APP_CANONICAL_URL=$STG NEXT_PUBLIC_WHATSAPP_URL=" "$(tr '\n' ' ' < "$X/BUILD_ENV" | sed 's/ $//')"
+ok "WhatsApp de staging = el oficial" "https://wa.me/584248532526" "$WA"
+ok "BUILD_ENV solo variables de build" "APP_CANONICAL_URL=$STG NEXT_PUBLIC_WHATSAPP_URL=$WA" "$(tr '\n' ' ' < "$X/BUILD_ENV" | sed 's/ $//')"
 ok "fingerprint = SHA-256 de BUILD_ENV" "$FP" "$(sha256sum < "$X/BUILD_ENV" | cut -c1-12)"
 ok "REVISION = HEAD" "$(git rev-parse HEAD)" "$(cat "$X/REVISION")"
 # La URL del build queda en las páginas estáticas; nunca la de Vercel.
@@ -125,6 +128,9 @@ ok "/ estático lleva la URL de staging" "1 0 0" \
   "$(n1 "$STG" "$X/$IDX") $(grep -c "$OTRA" "$X/$IDX") $(grep -c 'familia-ponquesito.vercel.app' "$X/$IDX")"
 ok "/ estático del otro build lleva la otra URL" "1 0 0" \
   "$(n1 "$OTRA" "$X2/$IDX") $(grep -c "$STG" "$X2/$IDX") $(grep -c 'familia-ponquesito.vercel.app' "$X2/$IDX")"
+# NEXT_PUBLIC_WHATSAPP_URL se graba en el bundle del navegador.
+ok "WhatsApp en el bundle: staging sí, otro build no" "1 0" \
+  "$(grep -rlF "$WA" "$X/.next/static" | head -1 | wc -l) $(grep -rlF 'wa.me/' "$X2/.next/static" | wc -l)"
 echo "  tamaño: $(du -h "$ARTIFACT" | cut -f1) comprimido, $(du -sh "$X" | cut -f1) extraído"
 VPS_HOST=admin@host.invalid ARTIFACT="$ARTIFACT" DRY_RUN=1 "$WEB/deploy-to-vps.sh" > "$TMP/dry.log" 2>&1
 ok "deploy DRY_RUN=1 termina sin conectar" "0 1 1" \
@@ -155,6 +161,9 @@ ok "GET /api/reports/weekly sin CRON_SECRET → 503" "503" "$(code "$B/api/repor
 curl -s "$B/" > "$TMP/home.html"
 ok "/ servido con la URL de staging, sin la de Vercel" "1 0" \
   "$(n1 "$STG" "$TMP/home.html") $(grep -c 'familia-ponquesito.vercel.app' "$TMP/home.html")"
+ok "footer de / enlaza al WhatsApp con el mensaje de /linktree" "1" \
+  "$(grep -oE 'href="https://wa\.me/[^"]*"' "$TMP/home.html" | sort -u \
+     | grep -cxF "$(grep -oE 'href="https://wa\.me/[^"]*"' "$ROOT/public/linktree.html")")"
 CHUNK="$(grep -o '/_next/static/[^"]*\.js' "$TMP/home.html" | head -1)"
 ok "estático $CHUNK" "200" "$(code "$B$CHUNK")"
 # Optimizada de verdad: WebP y más pequeña que el JPEG original.

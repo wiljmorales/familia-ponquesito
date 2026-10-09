@@ -186,6 +186,8 @@ encajan").
   está configurada; el mensaje prellenado se arma con
   `buildWhatsappMessageUrl` (nuevo helper en `src/lib/utils/whatsapp.ts`)
   sin asumir el formato exacto del enlace del negocio.
+  *Actualización (octubre de 2026):* el número quedó confirmado; ver la
+  entrada del 2026-10-09 en `docs/decisions.md`.
 - **El cambio de esquema no se aplicó por mi cuenta**: solo se cuenta con
   la URL del proyecto y la `service_role` key (acceso a datos vía API), no
   con una conexión directa a Postgres para ejecutar DDL. El dueño del

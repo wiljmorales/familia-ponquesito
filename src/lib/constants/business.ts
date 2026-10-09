@@ -12,13 +12,18 @@ export const INSTAGRAM_HANDLE = "@familiaponquesito";
 export const INSTAGRAM_URL = "https://www.instagram.com/familiaponquesito";
 
 /**
- * No hay un número de WhatsApp de negocio confirmado: la base de
- * conocimiento del Reto 1 solo documenta Instagram como canal de contacto.
- * Se deja configurable por variable de entorno pública en vez de inventar
- * un número; si no está definida, el footer no muestra el enlace. Ver
- * "Preguntas pendientes" en docs/challenge-2.md.
+ * WhatsApp oficial del negocio (+58 424-8532526), confirmado en octubre de
+ * 2026 (ver docs/decisions.md). Sigue viniendo de la variable pública
+ * `NEXT_PUBLIC_WHATSAPP_URL` (base `https://wa.me/584248532526`, sin
+ * mensaje): se graba en el build y, si un entorno no la define, el footer y
+ * "Continuar por WhatsApp" no se muestran. El staging del VPS la fija en
+ * deploy/web/staging.build.env; src/lib/whatsapp-official.test.ts comprueba
+ * que coincida con el botón de public/linktree.html.
  */
 export const WHATSAPP_URL = process.env.NEXT_PUBLIC_WHATSAPP_URL?.trim() || null;
+
+/** Mensaje prellenado de pedido: el mismo del botón de /linktree. */
+export const ORDER_WHATSAPP_MESSAGE = "Hola Familia Ponquesito, quiero hacer un pedido.";
 
 export const MIN_LEAD_DAYS = 3;
 export const DEPOSIT_PERCENT = 50;
