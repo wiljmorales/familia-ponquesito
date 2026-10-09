@@ -1,0 +1,63 @@
+# Familia Ponquesito — frontend Next.js (servidor standalone).
+# Instalación, despliegue y reversión: deploy/web/README.md.
+# Solo escucha en 127.0.0.1:3000; Caddy es el único punto público.
+[Unit]
+Description=Familia Ponquesito web (Next.js)
+After=network-online.target
+Wants=network-online.target
+# Sin release activo (antes del primer despliegue) no intenta arrancar.
+ConditionPathExists=/opt/ponquesito/web/current/server.js
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=ponquesito-web
+Group=ponquesito-web
+WorkingDirectory=/opt/ponquesito/web/current
+# Lo lee systemd antes de arrancar el proceso. No debe redefinir las cuatro
+# variables siguientes (EnvironmentFile tendría prioridad); el script de
+# releases lo comprueba antes de activar.
+EnvironmentFile=/etc/ponquesito/web.env
+Environment=NODE_ENV=production HOSTNAME=127.0.0.1 PORT=3000 NEXT_TELEMETRY_DISABLED=1
+ExecStart=/opt/ponquesito/node/bin/node /opt/ponquesito/web/current/server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+UMask=0077
+
+# Única escritura legítima: la caché de Next (.next/cache del release apunta a
+# /var/cache/ponquesito-web/<commit>). El código del release es de solo lectura.
+CacheDirectory=ponquesito-web
+CacheDirectoryMode=0700
+
+# Aislamiento.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+CapabilityBoundingSet=
+AmbientCapabilities=
+# Solo puede abrir el puerto 3000 (las conexiones salientes no se afectan).
+SocketBindAllow=tcp:3000
+SocketBindDeny=any
+# Sin MemoryDenyWriteExecute: el JIT de V8 necesita memoria W+X.
+
+[Install]
+WantedBy=multi-user.target

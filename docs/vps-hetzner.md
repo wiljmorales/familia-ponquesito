@@ -119,6 +119,9 @@ passwd <admin>        # interactivo; lo hace el propio administrador
   `/srv/ponquesito` (backend y secretos, 2750).
 - Instalación, configuración de staging con acceso restringido,
   verificación y reversión: [`deploy/caddy/README.md`](../deploy/caddy/README.md).
+- Next.js corre como `ponquesito-web` (usuario propio, solo
+  `127.0.0.1:3000`), con releases versionados en `/opt/ponquesito/web` y
+  rollback automático: [`deploy/web/README.md`](../deploy/web/README.md).
 
 ## 7. Rescate
 
@@ -129,6 +132,8 @@ Entra por Console/VNC y, según lo que haya que deshacer:
 - **Backend:** `systemctl disable --now ponquesito-backend`.
 - **Exposición web:** `ufw delete allow 80/tcp`, `ufw delete allow 443/tcp`
   y `systemctl disable --now caddy`.
+- **Next.js:** `ponquesito-web-release rollback` para volver al release
+  anterior, o `systemctl disable --now ponquesito-web` para pararlo.
 
 ## Estado y pendientes (2026-10-08)
 
@@ -158,3 +163,5 @@ Entra por Console/VNC y, según lo que haya que deshacer:
 7. Staging (`deploy/caddy/README.md`): registro DNS de staging, Caddy, 80 y
    443 en UFW y verificación desde una red independiente. Preparado, sin
    aplicar.
+8. Next.js en el VPS (`deploy/web/README.md`): Node de `.nvmrc`, bootstrap y
+   primer despliegue. Preparado y probado en local, sin aplicar.
