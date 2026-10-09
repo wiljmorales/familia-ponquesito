@@ -44,6 +44,7 @@ ok "unidad: HOSTNAME=127.0.0.1 PORT=3000" "1" "$(grep -c '^Environment=NODE_ENV=
 ok "bootstrap --dry-run sin root" "0" "$(bash "$WEB/bootstrap.sh" --dry-run >"$TMP/bootstrap.log" 2>&1; echo $?)"
 ok "bootstrap --dry-run solo muestra comandos" "" "$(grep -v '^+ \|^==\|^ya existe\|^AVISO\|^Listo\|^Node' "$TMP/bootstrap.log")"
 ok "deploy sin VPS_HOST se niega" "1" "$(env -u VPS_HOST bash "$WEB/deploy-to-vps.sh" >/dev/null 2>&1; echo $?)"
+ok "scripts ejecutables" "" "$(for f in "$WEB"/*.sh "$WEB"/test/*.sh; do [ -x "$f" ] || echo "${f#$ROOT/}"; done)"
 
 echo "== 2. Artefacto"
 if [ -z "${ARTIFACT:-}" ]; then
@@ -72,6 +73,8 @@ ok "sin rutas locales" "" "$(grep -rlIF -e "$HOME" -e "$ROOT" "$TMP/x" | head -3
 ok "REVISION = HEAD" "$(git rev-parse HEAD)" "$(cat "$TMP/x/$NAME/REVISION")"
 ok "NODE_VERSION = .nvmrc" "$(tr -d '[:space:]' < "$ROOT/.nvmrc")" "$(cat "$TMP/x/$NAME/NODE_VERSION")"
 echo "  tamaño: $(du -h "$ARTIFACT" | cut -f1) comprimido, $(du -sh "$TMP/x/$NAME" | cut -f1) extraído"
+VPS_HOST=admin@host.invalid ARTIFACT="$ARTIFACT" DRY_RUN=1 "$WEB/deploy-to-vps.sh" > "$TMP/dry.log" 2>&1
+ok "deploy DRY_RUN=1 termina sin conectar" "0 1" "$? $(grep -c '^DRY_RUN: no se conecta' "$TMP/dry.log")"
 
 echo "== 3. Servidor standalone (sin variables de la app)"
 REL="$TMP/x/$NAME"
