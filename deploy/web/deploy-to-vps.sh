@@ -5,11 +5,12 @@
 # release nuevo no pasa la comprobación de salud, se restaura el anterior.
 #
 # Uso:
-#   VPS_HOST=<admin>@<host> [VPS_SSH_KEY=<ruta-llave>] [BUILD_ENV_FILE=<ruta>] \
-#     [ARTIFACT=<tarball>] [DRY_RUN=1] deploy/web/deploy-to-vps.sh [ref]
+#   VPS_HOST=<admin>@<host> [VPS_SSH_KEY=<ruta-llave>] \
+#     BUILD_ENV_FILE=<ruta> | ARTIFACT=<tarball> [DRY_RUN=1] deploy/web/deploy-to-vps.sh [ref]
 #
 # VPS_HOST es obligatoria y no tiene valor por defecto. VPS_SSH_KEY es
 # opcional; sin ella, ssh usa su configuración habitual (~/.ssh/config, agente).
+# BUILD_ENV_FILE: variables de build (staging: deploy/web/staging.build.env).
 # ARTIFACT reutiliza un artefacto ya construido (con su .sha256 al lado).
 # DRY_RUN=1 construye y verifica en local y muestra lo que haría, sin conectar.
 set -euo pipefail
@@ -23,13 +24,16 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -n "${ARTIFACT:-}" ]; then
   TARBALL="$ARTIFACT"
 else
-  OUT_DIR="${OUT_DIR:-/tmp/ponquesito-web-artifacts}" "$HERE/build-artifact.sh" "$REF"
-  SHA="$(git rev-parse --verify "$REF^{commit}" | cut -c1-12)"
-  TARBALL="${OUT_DIR:-/tmp/ponquesito-web-artifacts}/ponquesito-web-$SHA.tar.gz"
+  PATH_FILE="$(mktemp)"; trap 'rm -f "$PATH_FILE"' EXIT
+  ARTIFACT_PATH_FILE="$PATH_FILE" "$HERE/build-artifact.sh" "$REF"
+  TARBALL="$(cat "$PATH_FILE")"
 fi
 NAME="$(basename "$TARBALL")"
 (cd "$(dirname "$TARBALL")" && sha256sum --quiet -c "$NAME.sha256") \
   || { echo "El SHA-256 de $NAME no coincide" >&2; exit 1; }
+
+CANONICAL="$(tar -xzOf "$TARBALL" "${NAME%.tar.gz}/BUILD_INFO" | grep '^canonical_url=' | cut -d= -f2-)"
+echo "Artefacto $NAME (APP_CANONICAL_URL=$CANONICAL; web.env del VPS debe tener la misma)"
 
 REMOTE_DIR='$HOME/ponquesito-web-incoming'
 ACTIVATE="sudo /usr/local/sbin/ponquesito-web-release deploy \"$REMOTE_DIR/$NAME\""

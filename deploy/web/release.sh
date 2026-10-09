@@ -4,13 +4,18 @@
 # con sudo. Ver deploy/web/README.md.
 #
 #   ponquesito-web-release deploy <tarball>   instala y activa un artefacto
-#   ponquesito-web-release activate <commit>  activa un release ya instalado
+#   ponquesito-web-release activate <id>      activa un release ya instalado
 #   ponquesito-web-release rollback           vuelve al release anterior
 #   ponquesito-web-release status
 #
-# Activar = cambiar el symlink current de forma atómica, reiniciar el servicio
-# y comprobar la salud. Si la comprobación falla, se restaura el release
-# anterior automáticamente y se sale con error.
+# Un release se identifica como <commit12>-<build12>: el commit y el
+# fingerprint de las variables de build (BUILD_ENV del artefacto).
+#
+# Activar = verificar el release y que web.env tenga la misma
+# APP_CANONICAL_URL con que se compiló; después, cambiar el symlink current
+# de forma atómica, reiniciar el servicio y comprobar la salud. Si algo de lo
+# primero falla, current no se toca. Si falla la salud, se restaura el
+# release anterior automáticamente y se sale con error.
 #
 # Las variables de abajo solo existen para la prueba local
 # (deploy/web/test/run-local.sh); sudo no las deja pasar.
@@ -38,6 +43,35 @@ check_env_file() {
   if grep -Eq '^[[:space:]]*(export[[:space:]]+)?(HOSTNAME|PORT|NODE_ENV)=' "$ENV_FILE"; then
     die "$ENV_FILE no puede definir HOSTNAME, PORT ni NODE_ENV (los fija la unidad)"
   fi
+}
+
+# Identidad del release: REVISION, BUILD_ENV y BUILD_INFO deben coincidir con
+# su nombre <commit12>-<build12>.
+verify_release() {
+  local dir="$1" id="$2" sha="${2%-*}" fp="${2#*-}" info
+  info="$dir/BUILD_INFO"
+  [ -f "$dir/REVISION" ] && [ -f "$dir/BUILD_ENV" ] && [ -f "$info" ] || die "$id: faltan REVISION, BUILD_ENV o BUILD_INFO"
+  [ "$(cut -c1-12 "$dir/REVISION")" = "$sha" ] || die "$id: REVISION no coincide con el commit $sha"
+  [ "$(sha256sum < "$dir/BUILD_ENV" | cut -c1-12)" = "$fp" ] || die "$id: BUILD_ENV no coincide con el fingerprint $fp"
+  [ "$(info_value build_fingerprint "$info")" = "$fp" ] || die "$id: BUILD_INFO tiene otro fingerprint"
+  [ "$(info_value commit "$info")" = "$(cat "$dir/REVISION")" ] || die "$id: BUILD_INFO tiene otro commit"
+  [ "$(info_value canonical_url "$info")" = "$(info_value APP_CANONICAL_URL "$dir/BUILD_ENV")" ] \
+    || die "$id: BUILD_INFO y BUILD_ENV tienen URL canónica distinta"
+}
+
+info_value() { grep -E "^$1=" "$2" | tail -1 | cut -d= -f2-; }
+
+# La URL canónica de runtime debe ser exactamente la del build: las páginas
+# estáticas llevan la del build y los correos usan la de runtime. Sin ella,
+# Next.js caería en la URL de producción de Vercel.
+check_canonical() {
+  local want have line
+  want="$(info_value canonical_url "$1/BUILD_INFO")"
+  [ -n "$want" ] || die "el release no declara canonical_url"
+  line="$(grep -E '^APP_CANONICAL_URL=' "$ENV_FILE" | tail -1 || true)"
+  [ -n "$line" ] || die "$ENV_FILE no define APP_CANONICAL_URL (el release requiere $want)"
+  have="${line#*=}"; have="${have%\"}"; have="${have#\"}"
+  [ "$have" = "$want" ] || die "APP_CANONICAL_URL de $ENV_FILE ($have) no coincide con la del build ($want)"
 }
 
 check_node() {
@@ -76,7 +110,9 @@ healthy() {
 activate() {
   local new="$1" old
   [ -f "$RELEASES/$new/server.js" ] || die "release $new no instalado"
+  verify_release "$RELEASES/$new" "$new"
   check_env_file
+  check_canonical "$RELEASES/$new"
   check_node "$RELEASES/$new"
   old="$(link_target current)"
   log "activando $new (anterior: ${old:-ninguno})"
@@ -98,15 +134,15 @@ activate() {
 }
 
 install_tarball() {
-  local tarball="$1" name sha tmp bad
+  local tarball="$1" name id tmp bad
   [ -f "$tarball" ] && [ -f "$tarball.sha256" ] || die "faltan $tarball o su .sha256"
   name="$(basename "$tarball" .tar.gz)"
-  [[ "$name" =~ ^ponquesito-web-[0-9a-f]{12}$ ]] || die "nombre de artefacto inesperado: $name"
-  sha="${name#ponquesito-web-}"
+  [[ "$name" =~ ^ponquesito-web-[0-9a-f]{12}-[0-9a-f]{12}$ ]] || die "nombre de artefacto inesperado: $name"
+  id="${name#ponquesito-web-}"
   (cd "$(dirname "$tarball")" && sha256sum --quiet -c "$(basename "$tarball").sha256") \
     || die "el SHA-256 no coincide"
-  if [ -d "$RELEASES/$sha" ]; then
-    log "release $sha ya instalado"; echo "$sha"; return
+  if [ -d "$RELEASES/$id" ]; then
+    log "release $id ya instalado"; echo "$id"; return
   fi
   # Solo rutas relativas dentro de <name>/, sin enlaces ni dispositivos.
   if tar -tzvf "$tarball" | awk '{print substr($1,1,1)}' | grep -qv '[-d]'; then
@@ -119,27 +155,28 @@ install_tarball() {
   bad="$(tar -tzf "$tarball" | grep -E "^$name/(backend(/|$)|(.*/)?\.env[^/]*$|(.*/)?\.git(/|$)|\.next/cache(/|$))" || true)"
   [ -z "$bad" ] || die "el artefacto contiene archivos prohibidos: $(echo "$bad" | head -3)"
 
-  tmp="$RELEASES/.incoming-$sha"
+  tmp="$RELEASES/.incoming-$id"
   rm -rf "$tmp"; mkdir -p "$tmp"
+  trap 'rm -rf "$tmp"' EXIT
   tar -xzf "$tarball" -C "$tmp" --no-same-owner --no-same-permissions
-  [ "$(cut -c1-12 "$tmp/$name/REVISION")" = "$sha" ] || { rm -rf "$tmp"; die "REVISION no coincide con $sha"; }
+  verify_release "$tmp/$name" "$id"
   check_node "$tmp/$name"
 
-  # Caché de Next (imágenes optimizadas) fuera del release, uno por commit:
+  # Caché de Next (imágenes optimizadas) fuera del release, uno por release:
   # el release queda de solo lectura para el servicio.
-  mkdir -p "$CACHE_DIR/$sha"
-  ln -s "$CACHE_DIR/$sha" "$tmp/$name/.next/cache"
+  mkdir -p "$CACHE_DIR/$id"
+  ln -s "$CACHE_DIR/$id" "$tmp/$name/.next/cache"
   if [ "$(id -u)" = 0 ]; then
     chown -R root:"$SERVICE_USER" "$tmp/$name"
-    chown "$SERVICE_USER:$SERVICE_USER" "$CACHE_DIR/$sha"
-    chmod 0700 "$CACHE_DIR/$sha"
+    chown "$SERVICE_USER:$SERVICE_USER" "$CACHE_DIR/$id"
+    chmod 0700 "$CACHE_DIR/$id"
   fi
   chmod -R u+rwX,g+rX,g-w,o-rwx "$tmp/$name"
-  mv -T "$tmp/$name" "$RELEASES/$sha"
-  touch "$RELEASES/$sha"   # prune ordena por fecha de instalación
-  rmdir "$tmp"
-  log "instalado $sha"
-  echo "$sha"
+  mv -T "$tmp/$name" "$RELEASES/$id"
+  touch "$RELEASES/$id"   # prune ordena por fecha de instalación
+  rmdir "$tmp"; trap - EXIT
+  log "instalado $id"
+  echo "$id"
 }
 
 # Conserva los KEEP releases más recientes y siempre current y previous.
@@ -166,12 +203,12 @@ status() {
 case "${1:-}" in
   deploy)
     [ -n "${2:-}" ] || die "uso: deploy <tarball>"
-    sha="$(install_tarball "$2")"
-    activate "$sha"
+    id="$(install_tarball "$2")"
+    activate "$id"
     prune
     status ;;
   activate)
-    [ -n "${2:-}" ] || die "uso: activate <commit>"
+    [ -n "${2:-}" ] || die "uso: activate <commit12>-<build12>"
     activate "$2"; status ;;
   rollback)
     prev="$(link_target previous)"
