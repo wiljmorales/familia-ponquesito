@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Servidor autónomo (.next/standalone) para el VPS. Solo lo activa
+  // deploy/web/build-artifact.sh; Vercel compila sin esta opción, igual que antes.
+  output: process.env.PONQUESITO_STANDALONE === "1" ? "standalone" : undefined,
   async rewrites() {
     return [
       // Página de enlaces (reconstrucción byte a byte de la de ChatGPT Sites).
