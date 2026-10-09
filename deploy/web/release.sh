@@ -157,7 +157,8 @@ install_tarball() {
 
   tmp="$RELEASES/.incoming-$id"
   rm -rf "$tmp"; mkdir -p "$tmp"
-  trap 'rm -rf "$tmp"' EXIT
+  # Ruta expandida ya: al salir por die, la variable local ya no existe.
+  trap "rm -rf -- '$tmp'" EXIT
   tar -xzf "$tarball" -C "$tmp" --no-same-owner --no-same-permissions
   verify_release "$tmp/$name" "$id"
   check_node "$tmp/$name"
