@@ -38,7 +38,8 @@ done
 # systemd-analyze exige que ExecStart exista: se verifica una copia que solo
 # cambia la ruta de Node.
 sed "s#/opt/ponquesito/node/bin/node#$NODE#" "$WEB/ponquesito-web.service" > "$TMP/ponquesito-web.service"
-ok "systemd-analyze verify" "" "$(systemd-analyze verify "$TMP/ponquesito-web.service" 2>&1)"
+# Solo cuentan los avisos de esta unidad (verify también revisa las del sistema).
+ok "systemd-analyze verify" "" "$(systemd-analyze verify "$TMP/ponquesito-web.service" 2>&1 | grep ponquesito-web)"
 ok "unidad: HOSTNAME=127.0.0.1 PORT=3000" "1" "$(grep -c '^Environment=NODE_ENV=production HOSTNAME=127.0.0.1 PORT=3000 NEXT_TELEMETRY_DISABLED=1$' "$WEB/ponquesito-web.service")"
 ok "bootstrap --dry-run sin root" "0" "$(bash "$WEB/bootstrap.sh" --dry-run >"$TMP/bootstrap.log" 2>&1; echo $?)"
 ok "bootstrap --dry-run solo muestra comandos" "" "$(grep -v '^+ \|^==\|^ya existe\|^AVISO\|^Listo\|^Node' "$TMP/bootstrap.log")"
@@ -87,9 +88,12 @@ done
 ok "/linktree byte a byte" "$(sha256sum < "$ROOT/public/linktree.html" | cut -c1-64)" "$(curl -s "$B/linktree" | sha256sum | cut -c1-64)"
 ok "/linktree/?source=review → 308" "308 $B/linktree?source=review" \
   "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "$B/linktree/?source=review")"
-for p in /backend/requirements.txt /health/ /api/v1/test /.env /.env.example /src/knowledge/familia-ponquesito.md /REVISION; do
+for p in /backend/requirements.txt /api/v1/test /.env /.env.example /src/knowledge/familia-ponquesito.md /REVISION; do
   ok "GET $p → 404" "404" "$(code "$B$p")"
 done
+# Next.js quita la barra final (308) y /health no existe. En el VPS no llega a
+# Next.js: Caddy envía /health/ a Django.
+ok "GET /health/ → 308 /health → 404" "404" "$(code -L "$B/health/")"
 ok "GET /api/reports/weekly sin CRON_SECRET → 503" "503" "$(code "$B/api/reports/weekly")"
 CHUNK="$(curl -s "$B/" | grep -o '/_next/static/[^"]*\.js' | head -1)"
 ok "estático $CHUNK" "200" "$(code "$B$CHUNK")"
@@ -97,7 +101,10 @@ ok "imagen optimizada (/_next/image)" "200" "$(code "$B/_next/image?url=%2Fimage
 ok "la caché de imágenes se escribe fuera del release" "1" "$([ -n "$(find "$TMP/cache/images" -type f 2>/dev/null | head -1)" ] && echo 1 || echo 0)"
 ok "escucha solo en 127.0.0.1" "127.0.0.1:$P" "$(ss -Hltn "sport = :$P" | awk '{print $4}' | sort -u | tr '\n' ' ' | sed 's/ $//')"
 for p in /prototipo /reporte-semanal; do echo "  info GET $p → $(code "$B$p")"; done
-ok "sin errores en el log del servidor" "" "$(grep -iE 'error|EACCES|EROFS|unhandled' "$TMP/server.log" | grep -v 'CRON_SECRET no está configurado' | head -5)"
+ok "sin errores en el log del servidor" "" "$(grep -iE 'error|EACCES|EROFS|unhandled' "$TMP/server.log" \
+  | grep -v 'CRON_SECRET no está configurado' | grep -v 'Supabase no está configurado' | head -5)"
+# Esperado sin credenciales: /reporte-semanal registra que falta Supabase.
+echo "  info errores esperados sin credenciales: $(grep -c 'Supabase no está configurado' "$TMP/server.log")"
 kill "${PIDS[-1]}"; wait "${PIDS[-1]}" 2>/dev/null; unset 'PIDS[-1]'
 chmod -R u+w "$REL"
 
@@ -172,8 +179,9 @@ ok "  sin symlinks temporales" "" "$(ls -A "$WEB_ROOT" | grep '\.tmp$')"
 
 cp "$C.sha256" "$TMP/sha.bak"; sed -i 's/^./0/' "$C.sha256"
 ok "SHA-256 alterado → rechazo" "1" "$(run deploy "$C")"; cp "$TMP/sha.bak" "$C.sha256"
-for m in backend env enlace; do
-  ok "artefacto con $m → rechazo" "1" "$(run deploy "$(variant eeeeeeeeeeee $m)")"
+# Un commit distinto por variante: cada una pasa por todas las comprobaciones.
+for v in e1:backend e2:env e3:enlace; do
+  ok "artefacto con ${v#*:} → rechazo" "1" "$(run deploy "$(variant "${v%%:*}eeeeeeeeee" "${v#*:}")")"
 done
 ok "  ningún rechazo instaló nada" "" "$(ls -A "$WEB_ROOT/releases" | grep -E 'eeee|incoming')"
 echo 'HOSTNAME=0.0.0.0' >> "$ENV_FILE"

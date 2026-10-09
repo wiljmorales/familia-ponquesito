@@ -116,7 +116,7 @@ install_tarball() {
      || tar -tzf "$tarball" | grep -Eq '(^|/)\.\.(/|$)'; then
     die "el artefacto contiene rutas fuera de $name/"
   fi
-  bad="$(tar -tzf "$tarball" | grep -E "^$name/(backend(/|$)|.*(^|/)\.env[^/]*$|.*(^|/)\.git(/|$)|\.next/cache(/|$))" || true)"
+  bad="$(tar -tzf "$tarball" | grep -E "^$name/(backend(/|$)|(.*/)?\.env[^/]*$|(.*/)?\.git(/|$)|\.next/cache(/|$))" || true)"
   [ -z "$bad" ] || die "el artefacto contiene archivos prohibidos: $(echo "$bad" | head -3)"
 
   tmp="$RELEASES/.incoming-$sha"
