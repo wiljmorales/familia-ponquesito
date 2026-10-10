@@ -25,19 +25,21 @@
 	}
 }
 
-# Lanzamiento fase 1 (2026-10-09): solo la página de enlaces es pública.
+# Lanzamiento fase 1 (2026-10-09; sin Django desde 2026-10-10): solo la
+# página de enlaces es pública.
 #
-#   import ponquesito_fase1 <upstream-django> <upstream-next>
+#   import ponquesito_fase1 <upstream-next>
 #
-# Lista blanca: /linktree (y /linktree/, que Next.js redirige con 308), sus
-# recursos (/favicon.svg y /assets/logo-familia-ponquesito.png, nada más de /assets/) y /health/ de
-# Django. / redirige con
-# 302 a /linktree conservando los parámetros. Cualquier otra ruta, incluidas
-# /api/* (también /api/v1/*), /_next/* y las páginas de la aplicación, es 404
-# de Caddy y no llega a ninguna aplicación. En las rutas permitidas solo se
-# aceptan GET y HEAD (405 para el resto): la página no tiene formularios.
+# Lista blanca: / (302 a /linktree conservando los parámetros), /linktree (y
+# /linktree/, que Next.js redirige con 308) y sus dos recursos: /favicon.svg
+# y /assets/logo-familia-ponquesito.png. Nada más llega a Next.js, y nada
+# llega a Django: /health, /health/ y sus variantes, /api/* (también
+# /api/v1/*), /_next/*, el resto de /assets/* y las páginas de la aplicación
+# son 404 de Caddy con cualquier método. En las rutas permitidas solo se
+# aceptan GET y HEAD (405 para el resto): la página no tiene formularios. La
+# disponibilidad se monitorea con /linktree.
 (ponquesito_fase1) {
-	@no_publico not path / /linktree /linktree/ /favicon.svg /assets/logo-familia-ponquesito.png /health/
+	@no_publico not path / /linktree /linktree/ /favicon.svg /assets/logo-familia-ponquesito.png
 	respond @no_publico "No encontrado" 404
 
 	@no_lectura not method GET HEAD
@@ -47,15 +49,8 @@
 	@raiz path /
 	redir @raiz /linktree{?query} 302
 
-	handle /health/ {
-		reverse_proxy {args[0]} {
-			import ponquesito_ip_cliente
-		}
-	}
-	handle {
-		reverse_proxy {args[1]} {
-			import ponquesito_ip_cliente
-		}
+	reverse_proxy {args[0]} {
+		import ponquesito_ip_cliente
 	}
 }
 

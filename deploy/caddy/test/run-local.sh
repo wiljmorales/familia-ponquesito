@@ -90,6 +90,9 @@ json() { python3 -c "import sys,json;print(json.load(sys.stdin)[\"$1\"])"; }
 
 FAIL=0
 ok() { if [ "$2" == "$3" ]; then echo "  OK  $1"; else echo "  FALLA $1 — esperado [$2], obtenido [$3]"; FAIL=1; fi; }
+# Peticiones atendidas por Django hasta ahora (líneas del access log de
+# Gunicorn): fase 1 no debe sumar ninguna.
+django_hits() { wc -l < "$TMP/access.log"; }
 # Comprueba que la petición la atendió Django: Next.js (stub) no recibió nada.
 nada_a_next() { ok "$1: Next.js no la recibió" "" "$(cat "$TMP/next.log")"; : > "$TMP/next.log"; }
 
@@ -104,7 +107,11 @@ F_BLOQUEADAS=(/agenda /agenda/ /agenda/reservas/FP-8-TEST /crea-tu-torta /crea-t
   /api/v1/probe/cookies/ /_next/static/chunks/x.js /_next/image /linktree.html /linktreex
   /linktree/extra /AGENDA /Api/v1/x /favicon.ico /robots.txt /sitemap.xml /assets /assets/ /assets/x.png
   /assets/cake-builder/x.png /assets/logo-familia-ponquesito.png/x /assets/logo-familia-ponquesito.pngx
-  /assets/logo-familia-ponquesito /health /health/x /healthz
+  /assets/logo-familia-ponquesito /healthz)
+# /health y sus variantes: 404 de Caddy con cualquier método, sin llegar a
+# Django ni a Next.js.
+F_HEALTH=(/health /health/ /health/x /health// /HEALTH/ /Health /health.json "/health/?a=1" /health%2F
+  /api/v1/health/ /backend/health/
   /backend/requirements.txt /.env /REVISION /src/knowledge/familia-ponquesito.md /images/logo/icon-on-cream.png)
 AUTH=(-u "prueba:$STAGING_PASS")
 LT_SHA=$(sha < "$ROOT/public/linktree.html")
@@ -199,7 +206,8 @@ ok "GET / permitido → Next.js"             "next-stub GET /" "$(c "${AUTH[@]}"
 ok "GET /linktree permitido → Next.js"     "next-stub GET /linktree" "$(c "${AUTH[@]}" $S/linktree)"
 : > "$TMP/next.log"
 
-echo "-- Lanzamiento fase 1 (solo /linktree)"
+echo "-- Lanzamiento fase 1 (solo /linktree, sin Django)"
+DJ0="$(django_hits)"
 ok "fase1 / → 302"                         "302" "$(code $F/)"
 ok "fase1 / → /linktree"                   "/linktree" "$(hdr Location $F/)"
 ok "fase1 /?utm_source=qr conserva query"  "/linktree?utm_source=qr" "$(hdr Location "$F/?utm_source=qr")"
@@ -211,8 +219,13 @@ ok "fase1 HEAD /linktree → Next.js"        "200 HEAD /linktree" "$(code -I $F/
 ok "fase1 /favicon.svg → Next.js"          "next-stub GET /favicon.svg" "$(c $F/favicon.svg)"
 ok "fase1 /assets/logo… → Next.js"         "next-stub GET /assets/logo-familia-ponquesito.png" "$(c $F/assets/logo-familia-ponquesito.png)"
 : > "$TMP/next.log"
-ok "fase1 /health/ → Django"               '{"status": "ok", "database": "ok"}' "$(c $F/health/)"
-nada_a_next "fase1 /health/"
+for p in "${F_HEALTH[@]}"; do
+  for m in GET HEAD POST PUT DELETE PATCH OPTIONS; do
+    if [ "$m" = HEAD ]; then r="$(code -I "$F$p")"; else r="$(code -X "$m" "$F$p") $(c -X "$m" "$F$p")"; fi
+    ok "fase1 $m $p → 404"                 "$([ "$m" = HEAD ] && echo 404 || echo '404 No encontrado')" "$r"
+  done
+done
+nada_a_next "fase1 /health y variantes"
 for p in "${F_BLOQUEADAS[@]}"; do
   ok "fase1 GET $p → 404"                  "404 No encontrado" "$(code $F$p) $(c $F$p)"
 done
@@ -230,7 +243,6 @@ for a in $(cd "$ROOT/public" && find assets -type f ! -path "assets/logo-familia
   ok "fase1 GET /$a → 404"                 "404 No encontrado" "$(code "$F/$a") $(c "$F/$a")"
 done
 ok "fase1 POST /assets/logo… → 405"        "405" "$(code -X POST $F/assets/logo-familia-ponquesito.png)"
-ok "fase1 POST /health/ → 405 (no llega a Django)" "405" "$(code -X POST $F/health/)"
 ok "fase1 POST /agenda (Server Action) → 404" "404" "$(code -X POST -H 'Next-Action: x' $F/agenda)"
 ok "fase1 POST /api/assistant → 404"       "404" "$(code -X POST $F/api/assistant)"
 ok "fase1 POST /api/v1/probe/cookies/ → 404" "404" "$(code -X POST $F/api/v1/probe/cookies/)"
@@ -248,6 +260,7 @@ ok "fase1 www /agenda → apex (allí 404)"   "https://fase1.ponquesito.test/age
 ok "fase1 POST www → 301 (sin aplicación)" "301" "$(code -X POST $WF/linktree)"
 : > "$TMP/next.log"
 nada_a_next "fase1 www"
+ok "fase1: ninguna petición llegó a Django"  "$DJ0" "$(django_hits)"
 # Caddyfile.fase1 usa el mismo bloque que se prueba aquí (salvo nombres,
 # puertos y `log`).
 norm() { sed -E 's/fase1\.ponquesito\.test/familiaponquesito.com/g; s/127\.0\.0\.1:18001/127.0.0.1:8000/; s/127\.0\.0\.1:18002/127.0.0.1:3000/' \
@@ -288,6 +301,7 @@ if [ -n "$NEXT_APP" ]; then
   ok "/health/ sigue en Django"            '{"status": "ok", "database": "ok"}' "$(c $A/health/)"
   ok "staging /linktree byte a byte"       "$LT_SHA" "$(c "${AUTH[@]}" $S/linktree | sha)"
   ok "staging / landing"                   "200" "$(code "${AUTH[@]}" $S/)"
+  DJ1="$(django_hits)"
   ok "fase1 /linktree byte a byte"         "$LT_SHA" "$(c $F/linktree | sha)"
   ok "fase1 / → /linktree (seguido)"       "$LT_SHA" "$(c -L $F/ | sha)"
   ok "fase1 /linktree/?a=1 → 308 de Next.js" "308 /linktree?a=1" "$(code "$F/linktree/?a=1") $(hdr Location "$F/linktree/?a=1")"
@@ -307,6 +321,8 @@ if [ -n "$NEXT_APP" ]; then
   ok "  …que Next.js sí serviría directamente" "200" "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18002/$A1")"
   # Caddy no distingue mayúsculas; Next.js sí, para archivos estáticos.
   ok "fase1 logo en mayúsculas → 404 de Next.js" "404" "$(code "$F/ASSETS/LOGO-FAMILIA-PONQUESITO.PNG")"
+  ok "fase1 /health/ → 404 de Caddy (Next.js real)" "404 No encontrado" "$(code $F/health/) $(c $F/health/)"
+  ok "fase1 (Next.js real): ninguna petición llegó a Django" "$DJ1" "$(django_hits)"
   kill "$NEXT_PID"; wait "$NEXT_PID" 2>/dev/null
 else
   echo "== Fase 2 omitida (define NEXT_DIR para probar con Next.js real)"
@@ -316,9 +332,11 @@ fi
 echo "== Next.js caído"
 ok "staging Next.js caído → 503"           "503" "$(code "${AUTH[@]}" $S/agenda)"
 ok "Django sigue respondiendo"             "200" "$(code "${AUTH[@]}" $S/health/)"
+DJ2="$(django_hits)"
 ok "fase1 Next.js caído → 503"             "503" "$(code $F/linktree)"
-ok "fase1 /health/ sigue en Django"        "200" "$(code $F/health/)"
+ok "fase1 /health/ sigue en 404"           "404" "$(code $F/health/)"
 ok "fase1 rutas bloqueadas siguen en 404"  "404" "$(code $F/agenda)"
+ok "fase1 (Next.js caído): ninguna petición llegó a Django" "$DJ2" "$(django_hits)"
 
 echo
 if [ "$FAIL" -eq 0 ]; then echo "TODAS LAS PRUEBAS OK"; else echo "HAY FALLOS"; tail -20 "$TMP/caddy.log"; fi

@@ -575,3 +575,24 @@ enlaces de los QR impresos; el resto de la aplicación no se publica todavía.
 - **Motivo**: publicar ya lo que los QR necesitan, sin exponer funciones
   que hoy fallarían ni abrir superficies (Server Actions, `/api/*`) que
   escriben datos, envían correos o consumen cuota.
+
+## 2026-10-10 — Fase 1 sin Django: `/health/` deja de ser público
+
+Frederik cancela la fase B (añadir el apex a `DJANGO_ALLOWED_HOSTS`) al
+descubrir que el backend desplegado en el VPS es una revisión antigua
+(`3696d60`, con el `settings.py` de `f473f0e`): no soporta
+`DJANGO_BEHIND_HTTPS_PROXY` ni las rutas `/api/v1/*` de la rama.
+
+- **Rutas públicas del lanzamiento**: solo `/` (302 a `/linktree`),
+  `/linktree`, `/linktree/`, `/favicon.svg` y
+  `/assets/logo-familia-ponquesito.png`. Sustituye a la lista de la entrada
+  del 2026-10-09, que incluía `/health/`.
+- **Sin Django**: el snippet `ponquesito_fase1` solo recibe el upstream de
+  Next.js (`127.0.0.1:3000`). `/health`, `/health/` y sus variantes son 404
+  de Caddy con cualquier método y no llegan a ninguna aplicación.
+  `deploy/caddy/test/run-local.sh` comprueba con el access log de Gunicorn
+  que ninguna petición de fase 1 llega a Django.
+- **Monitoreo**: la disponibilidad se comprueba con `GET /linktree` (200).
+- **Sin cambios en el VPS**: el backend y su `backend.env` se quedan como
+  están. El artefacto de Next.js desplegado (`23c4f0c98b25-8ad20707a17d`) no
+  cambia: este cambio es solo de Caddy, que aún no está instalado.

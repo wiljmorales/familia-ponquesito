@@ -27,7 +27,7 @@ www.ponquesito.test {
 fase1.ponquesito.test {
 	import ponquesito_cabeceras
 	route {
-		import ponquesito_fase1 127.0.0.1:18001 127.0.0.1:18002
+		import ponquesito_fase1 127.0.0.1:18002
 	}
 	handle_errors 502 {
 		respond "Servicio no disponible temporalmente" 503

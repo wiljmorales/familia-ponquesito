@@ -106,8 +106,10 @@ sesiones en cookie firmada), sin PostgreSQL ni datos reales. Comprueba:
 - **Staging:** 401 sin credenciales o con credenciales erróneas; `noindex`;
   POST, PUT y `/api/*` hacia Next.js bloqueados sin llegar a él; `/api/v1/*`
   sí llega a Django; 503 si Next.js está caído y Django sigue respondiendo.
-- **Lanzamiento fase 1:** `/` → 302 con parámetros; `/linktree`, sus dos
-  recursos y `/health/` pasan; el resto de `/assets/*` (incluidos archivos
+- **Lanzamiento fase 1:** `/` → 302 con parámetros; `/linktree` y sus dos
+  recursos pasan; `/health`, `/health/` y 9 variantes más → 404 con GET,
+  HEAD, POST, PUT, DELETE, PATCH y OPTIONS; ninguna petición llega a Django
+  (access log de Gunicorn); el resto de `/assets/*` (incluidos archivos
   reales del cake builder) → 404 sin llegar a Next.js; HEAD también; POST, PUT, DELETE, PATCH y
   OPTIONS → 405 con `Allow`; las rutas de la aplicación, `/api/*`,
   `/_next/*` y rutas con `..`, `%2e%2e` o `//` → 404 sin llegar a ninguna
@@ -118,8 +120,8 @@ sesiones en cookie firmada), sin PostgreSQL ni datos reales. Comprueba:
   `/linktree/?a=1` → 308 a `/linktree?a=1`; las API de Next.js responden
   desde Next.js; `/api/v1/*` y `/health/` siguen en Django. En fase 1:
   `/` y `www` llevan a la página de enlaces byte a byte, todos sus recursos
-  cargan, no usa `/_next` ni scripts, y con Next.js caído la respuesta es
-  503 mientras `/health/` sigue en Django.
+  cargan, no usa `/_next` ni scripts, `/health/` es 404 y, con Next.js
+  caído, la respuesta es 503; en ningún caso llega nada a Django.
 
 ## Instalación de staging en el VPS
 
@@ -269,9 +271,13 @@ Para dar staging por bueno:
 
 ## Lanzamiento fase 1: solo Linktree
 
-Decidido el 2026-10-09 (`docs/decisions.md`). Los QR apuntan a
-`https://familiaponquesito.com/linktree`. `Caddyfile.fase1` usa el snippet
-`ponquesito_fase1`, una lista blanca:
+Decidido el 2026-10-09; sin Django desde el 2026-10-10 (`docs/decisions.md`).
+Los QR apuntan a `https://familiaponquesito.com/linktree`. Durante el
+lanzamiento **solo son públicos `/`, `/linktree`, `/linktree/`,
+`/favicon.svg` y `/assets/logo-familia-ponquesito.png`**. `Caddyfile.fase1`
+usa el snippet `ponquesito_fase1`, una lista blanca que solo recibe el
+upstream de Next.js (`import ponquesito_fase1 127.0.0.1:3000`): Django no
+participa. La disponibilidad se monitorea con `GET /linktree` (200).
 
 | Petición | Respuesta |
 |---|---|
@@ -279,10 +285,9 @@ Decidido el 2026-10-09 (`docs/decisions.md`). Los QR apuntan a
 | `GET /linktree`, `GET /linktree?…` | Next.js: `public/linktree.html` |
 | `GET /linktree/` | Next.js: 308 → `/linktree` |
 | `GET /favicon.svg`, `GET /assets/logo-familia-ponquesito.png` | Next.js: los dos únicos recursos de la página |
-| `GET /health/` | Django |
 | `HEAD` en las rutas anteriores | igual que `GET`, sin cuerpo |
 | Otro método (`POST`, `PUT`, `DELETE`, `PATCH`, `OPTIONS`) en esas rutas | 405 de Caddy, `Allow: GET, HEAD` |
-| Cualquier otra ruta y método: `/api/*` (incluida `/api/v1/*`), `/_next/*`, `/agenda*`, `/crea-tu-torta*`, `/agente*`, `/prototipo*`, `/reporte-semanal*`, `/asistente*`, `/health`, `/linktree.html`, `/favicon.ico`, `/robots.txt`, el resto de `/assets/*` (cake builder)… | 404 de Caddy (`No encontrado`); no llega a ninguna aplicación |
+| Cualquier otra ruta, con cualquier método: `/health`, `/health/` y sus variantes, `/api/*` (incluida `/api/v1/*`), `/_next/*`, `/agenda*`, `/crea-tu-torta*`, `/agente*`, `/prototipo*`, `/reporte-semanal*`, `/asistente*`, `/linktree.html`, `/favicon.ico`, `/robots.txt`, el resto de `/assets/*` (cake builder)… | 404 de Caddy (`No encontrado`); no llega a Next.js ni a Django |
 | `http://…` | 308 → `https://…` (Caddy) |
 | `www.familiaponquesito.com/<ruta>?<query>` | 301 → `https://familiaponquesito.com/<ruta>?<query>` |
 | Next.js caído | 503 `Servicio no disponible temporalmente` en las rutas que van a Next.js |
@@ -293,12 +298,12 @@ distinguen al comparar: `/LINKTREE` sirve la misma página (la reescritura
 de Next.js tampoco las distingue), `/AGENDA` es 404 de Caddy y el logo en
 mayúsculas llega a Next.js, que responde 404.
 `test/run-local.sh` lo prueba todo, también con el artefacto de producción
-real (`NEXT_RELEASE`), y comprueba que el bloque de `Caddyfile.fase1` es el
-mismo que se prueba.
+real (`NEXT_RELEASE`): comprueba que el bloque de `Caddyfile.fase1` es el
+mismo que se prueba y, con el access log de Gunicorn, que ninguna petición
+de fase 1 llega a Django (con Next.js sustituto, real y caído).
 
-Antes del corte, Django debe aceptar el apex: añadir
-`familiaponquesito.com` a `DJANGO_ALLOWED_HOSTS` y activar
-`DJANGO_BEHIND_HTTPS_PROXY=true` en `backend.env` (paso 6 de staging).
+El backend del VPS no se toca en esta fase: su `backend.env` sigue sin el
+dominio en `DJANGO_ALLOWED_HOSTS` y no hace falta.
 
 ## Producción completa (más adelante)
 

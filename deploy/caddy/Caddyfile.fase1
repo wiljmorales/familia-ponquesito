@@ -15,7 +15,7 @@ familiaponquesito.com {
 	log
 	import ponquesito_cabeceras
 	route {
-		import ponquesito_fase1 127.0.0.1:8000 127.0.0.1:3000
+		import ponquesito_fase1 127.0.0.1:3000
 	}
 	# Next.js caído o reiniciándose: respuesta clara en vez de un 502.
 	handle_errors 502 {
