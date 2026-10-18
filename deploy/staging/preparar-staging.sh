@@ -109,7 +109,22 @@ bloqueo() {
   exit 2
 }
 trap 'fallo "orden inesperada falló en la línea $LINENO"' ERR
-al_salir() { [ -d "$EVID" ] && chown -R "$ADMIN:$ADMIN" "$EVID" 2>/dev/null; [ -d "$AJUSTES" ] && chown -R "$ADMIN:$ADMIN" "$AJUSTES" 2>/dev/null; true; }
+REGISTRO_PID=
+# Al salir, por cualquier camino: se cierra el registro (se devuelve la salida
+# a la terminal y se espera a que tee termine) y solo entonces se sella la
+# evidencia, para que ningún archivo cambie después de SHA256SUMS.
+al_salir() {
+  if [ -n "$REGISTRO_PID" ]; then
+    exec 1>&3 2>&4 3>&- 4>&-
+    wait "$REGISTRO_PID" 2>/dev/null || true
+  fi
+  if [ -d "$EVID" ]; then
+    (cd "$EVID" && rm -f SHA256SUMS && sha256sum -- * >SHA256SUMS) && echo "Evidencia sellada: $EVID/SHA256SUMS"
+    chown -R "$ADMIN:$ADMIN" "$EVID" 2>/dev/null || true
+  fi
+  [ -d "$AJUSTES" ] && chown -R "$ADMIN:$ADMIN" "$AJUSTES" 2>/dev/null
+  true
+}
 trap al_salir EXIT
 
 sql_ro() {  # sql_ro <base> [args psql]: sesión de solo lectura como postgres
@@ -666,7 +681,8 @@ main() {
   # Nada se escribe (ni la evidencia) hasta validar la ubicación del paquete.
   comprobar_ubicacion
   mkdir -m 700 "$EVID"
-  exec > >(tee -a "$EVID/registro.txt") 2>&1
+  exec 3>&1 4>&2 > >(tee -a "$EVID/registro.txt") 2>&1
+  REGISTRO_PID=$!
   echo "Staging Familia Ponquesito ($MODO) — $SELLO en $(hostname)"
   echo "Comprobaciones previas (solo lectura)…"
   echo "   ubicación: $PAQ/preparar-staging.sh; antecesores de root o $ADMIN, sin enlaces ni escritura de terceros"
@@ -721,7 +737,6 @@ EOF
     diff <(cut -d' ' -f1,2 "$EVID/produccion-antes.txt.huellas") <(cut -d' ' -f1,2 "$EVID/produccion-despues.txt.huellas") || true
   fi
   echo "   servicios, backend.env, unidad, /srv/ponquesito, rol y credencial de $ROL_PROD y respaldo: sin cambios"
-  (cd "$EVID" && sha256sum -- * >SHA256SUMS)
   echo
   lista_cambios "Cambios hechos en esta ejecución:"
   echo "Staging listo en 127.0.0.1:$PUERTO. Evidencia: $EVID"

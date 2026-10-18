@@ -8,6 +8,11 @@
 # fp-staging 700. Cada caso comprueba el código de salida, el mensaje, si se
 # escribió evidencia, que el script no cambió dueño ni modo de /, /home,
 # /home/wilfredo ni fp-staging, y que tras restaurar / y /home siguen root 755.
+# Si hay evidencia, la más reciente debe estar sellada con sus archivos finales:
+# SHA256SUMS lista exactamente los archivos del directorio y verifica (también
+# un segundo después), registro.txt contiene el mensaje final y no la línea del
+# sello, y todo es de wilfredo. Origen: el registro de la primera ejecución
+# real recibió el resumen final después de calcular SHA256SUMS.
 # Al final, --aplicar con la invocación exacta y una segunda ejecución.
 set -euo pipefail
 
@@ -17,6 +22,21 @@ FALLOS=0
 
 sim() { docker exec -i "$C" bash -c "$1"; }
 evidencias() { sim 'ls -d /home/wilfredo/fp-staging/evidencia-* 2>/dev/null | wc -l'; }
+# sellada <texto final>: la evidencia más reciente está sellada con sus archivos finales.
+sellada() {
+  docker exec -i "$C" bash -s -- "$1" <<'SH'
+set -u
+d=$(ls -d /home/wilfredo/fp-staging/evidencia-* | sort | tail -1); cd "$d" || exit 1
+for _ in 1 2; do
+  sha256sum --quiet --strict -c SHA256SUMS || { echo "SHA256SUMS no verifica"; exit 1; }
+  [ "$(ls -A | grep -vx SHA256SUMS | sort)" = "$(sed 's/^[0-9a-f]\{64\}  //' SHA256SUMS | sort)" ] || { echo "SHA256SUMS no lista exactamente los archivos"; exit 1; }
+  sleep 1
+done
+grep -qF -- "$1" registro.txt || { echo "registro.txt sin el mensaje final"; exit 1; }
+! grep -q 'Evidencia sellada' registro.txt || { echo "el sello se escribió en el registro"; exit 1; }
+[ -z "$(find . ! -user wilfredo)" ] || { echo "archivos que no son de wilfredo"; exit 1; }
+SH
+}
 
 # caso <nombre> <código> <texto esperado> <evidencia: no|si> <preparar> <invocar como wilfredo> <restaurar>
 caso() {
@@ -29,16 +49,21 @@ caso() {
   despues=$(evidencias); perm_despues=$(sim "$permisos")
   sim "$restaurar"
   sistema=$(sim 'stat -c "%a %U:%G" / /home | tr "\n" " "')
-  local ok=1
+  local ok=1 sello=
   [ "$real" = "$codigo" ] || ok=0
   grep -qF -- "$texto" <<<"$salida" || ok=0
-  if [ "$evid" = no ]; then [ "$despues" = "$antes" ] || ok=0; else [ "$despues" -gt "$antes" ] || ok=0; fi
+  if [ "$evid" = no ]; then [ "$despues" = "$antes" ] || ok=0
+  else
+    [ "$despues" -gt "$antes" ] || ok=0
+    grep -q '^Evidencia sellada: ' <<<"$salida" || { ok=0; sello="sin línea de sello"; }
+    sello=${sello:-$(sellada "$texto")} || ok=0
+  fi
   [ "$perm_antes" = "$perm_despues" ] || ok=0
   [ "$sistema" = "755 root:root 755 root:root " ] || ok=0
-  if [ "$ok" = 1 ]; then echo "OK    $nombre (código $real, evidencia: $evid)"
+  if [ "$ok" = 1 ]; then echo "OK    $nombre (código $real, evidencia: $evid$([ "$evid" = si ] && echo ", sellada"))"
   else
     FALLOS=$((FALLOS + 1))
-    echo "FALLO $nombre: código $real (esperado $codigo), evidencia $antes→$despues, permisos $perm_antes→$perm_despues, sistema: $sistema"
+    echo "FALLO $nombre: código $real (esperado $codigo), evidencia $antes→$despues ${sello:+($sello)}, permisos $perm_antes→$perm_despues, sistema: $sistema"
     grep -E '^!!|Nada|Comprobación completa' <<<"$salida" | sed 's/^/      /' || true
   fi
 }

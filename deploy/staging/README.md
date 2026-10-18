@@ -89,6 +89,19 @@ Al final repite la foto de producción y falla si algo cambió. Deja la evidenci
 en `~/fp-staging/evidencia-<UTC>-aplicar/` (sin secretos) y la clave interna
 en `~/fp-staging/entrega/internal-api-key` (600), para copiarla y borrarla.
 
+La evidencia se sella al salir, por cualquier camino (éxito, bloqueo o fallo):
+primero se cierra el registro (la salida vuelve a la terminal y se espera a
+`tee`) y después se calcula `SHA256SUMS`. La terminal muestra entonces
+`Evidencia sellada: …/SHA256SUMS`, que no queda en `registro.txt`. Para
+verificarla: `cd <evidencia> && sha256sum --strict -c SHA256SUMS`.
+
+La primera ejecución real (`evidencia-20261018T162130Z-aplicar`) se selló antes
+del resumen final, así que su `registro.txt` no verifica. Sus primeras 109
+líneas (7378 bytes) sí coinciden con el hash sellado; las 20 siguientes son el
+resumen («Cambios hechos…» y «Staging listo…»). La explicación está junto a la
+copia privada (`VERIFICACION-evidencia-20261018T162130Z.txt`), y esa evidencia
+se conserva sin tocar.
+
 Puede volver a ejecutarse: lo que ya existe y es suyo se reutiliza. Un fallo a
 mitad deja los cambios hechos listados y no revierte nada.
 
@@ -145,6 +158,11 @@ del respaldo real con su ACL y servicios de producción ficticios en 8000 y 3000
   intento real con `cd ~/fp-staging && sudo bash ./preparar-staging.sh` se
   bloqueó con «/ debe ser de wilfredo», porque `$0` relativo se resolvía después
   de `cd /`.
+- Sellado, en los 13 casos que escriben evidencia (comprobación, bloqueos y
+  `--aplicar` dos veces): `SHA256SUMS` verifica, también un segundo después, y
+  lista exactamente los archivos; `registro.txt` contiene el mensaje final y no
+  la línea del sello. Control negativo: con el script anterior, la evidencia de
+  `--aplicar` no verifica.
 - Nueva ejecución tras completar: código 0, nada que migrar.
 - Reanudación después de un fallo a mitad: continúa.
 - Bloqueos con código 2 y nada cambiado: rol, base o `/opt` ajenos con el
