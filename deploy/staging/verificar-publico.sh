@@ -58,6 +58,18 @@ done
 fi
 if [ "$FASE" = dns ]; then echo; [ "$FALLOS" = 0 ] && echo "DNS: todo OK" || { echo "DNS: $FALLOS diferencias"; exit 1; }; exit 0; fi
 
+# El resolvedor de este equipo puede guardar en caché la ausencia del nombre
+# (consultas previas a crear el registro) durante el TTL negativo de la zona.
+# Entonces se conecta a la IP ya verificada por DoH (--resolve): la petición
+# sigue saliendo por Internet al VPS, con SNI y certificado verificados.
+if [ -z "$SIM_IP" ]; then
+  LOCAL=$({ getent ahostsv4 "$NOMBRE" 2>/dev/null || true; } | awk '{print $1}' | sort -u | tr '\n' ' ' | sed 's/ $//')
+  if [ "$LOCAL" != "$IP" ]; then
+    echo "aviso: el resolvedor local devuelve «${LOCAL:-nada}» para $NOMBRE (¿caché negativa?); se usa la IP verificada por DoH"
+    C=(--resolve "$NOMBRE:443:$IP" --resolve "$NOMBRE:80:$IP")
+  fi
+fi
+
 echo "Certificado (sin -k; raíces del sistema)"
 cert=$(openssl s_client "${OSSL[@]}" -connect "$IP:443" -servername "$NOMBRE" -verify_hostname "$NOMBRE" -verify_return_error </dev/null 2>/dev/null || true)
 v "cadena y nombre verificados" "0 (ok)" "$(sed -n 's/^ *Verify return code: \(.*\)$/\1/p' <<<"$cert" | head -1)"
