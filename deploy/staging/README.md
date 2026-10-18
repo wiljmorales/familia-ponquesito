@@ -17,13 +17,24 @@ Código desplegado: `35cfebb785e3e92dce665177e424ace08074ed33`, fijado en
 | `preparar-staging.sh` | Se ejecuta con sudo en el VPS (`--comprobar` / `--aplicar`) |
 | `ponquesito-staging-backend.service` | Unidad systemd; mismo aislamiento que la de producción, `-b 127.0.0.1:8001 -w 2` |
 | `empaquetar.sh` | En local: script, unidad, `git archive` del backend en el SHA y wheels con hash |
-| `probar-tunel.sh`, `test/` | En local: túnel SSH y flujos reales de Next.js con SMTP local `.invalid` |
+| `probar-tunel.sh`, `test/*.e2e.ts` | En local: túnel SSH y flujos reales de Next.js con SMTP local `.invalid` |
+| `test/sim/crear.sh`, `test/regresion-rutas.sh` | En local: simulación del VPS (Docker con systemd) y regresión de ubicación y permisos |
 
 ## Qué hace `--aplicar`
 
 Primero hace todas las comprobaciones, solo de lectura. Si algo no cuadra,
 termina con código 2 sin cambiar nada:
 
+- Ubicación, antes de escribir nada (ni la evidencia): sudo desde `wilfredo`, y
+  el script tiene que ser `/home/wilfredo/fp-staging/preparar-staging.sh` tanto
+  en la ruta pedida como en la física. Sirven `cd ~/fp-staging && sudo bash
+  ./preparar-staging.sh`, la ruta absoluta o una relativa; se bloquean un
+  script o un `fp-staging` que sean enlaces, una copia en otra ruta o el script
+  por stdin. Cada antecesor tiene que ser un directorio real y no admitir
+  escritura de grupo ni de otros. Los del sistema (`/`, `/home`) deben ser de
+  root; desde `/home/wilfredo`, de `wilfredo`. `fp-staging`, `wheelhouse` y el
+  respaldo deben ser privados; sus archivos, regulares (no enlaces), de
+  `wilfredo` y sin escritura de terceros. No se cambian dueños ni permisos.
 - Host `ubuntu-4gb-hel1-1`, Ubuntu 26.04, un único clúster online `18/main/5432`
   y ejecución como `wilfredo` mediante sudo.
 - `SHA256SUMS` del paquete y del respaldo. El tar debe llevar el commit
@@ -93,8 +104,9 @@ rsync -a --chmod=D700,F600 -e "ssh -i ~/.ssh/familia_ponquesito" <dir-nuevo>/ wi
 En el VPS, en una terminal de `wilfredo`:
 
 ```bash
-sudo bash ~/fp-staging/preparar-staging.sh --comprobar   # opcional, solo lectura
-sudo bash ~/fp-staging/preparar-staging.sh --aplicar
+cd ~/fp-staging
+sudo bash ./preparar-staging.sh --comprobar   # opcional, solo lectura
+sudo bash ./preparar-staging.sh --aplicar
 ```
 
 En local, después: traer la evidencia y los ajustes, mover la clave a
@@ -118,11 +130,21 @@ sudo userdel ponquesito-staging
 
 ## Probado
 
+```bash
+deploy/staging/test/sim/crear.sh <respaldo-local> <paquete>
+deploy/staging/test/regresion-rutas.sh
+```
+
 En una simulación del VPS: Ubuntu 26.04 con systemd, PostgreSQL
 `18.6-0ubuntu0.26.04.1`, Python 3.14.4, el mismo `pg_hba`, `ponquesito` restaurada
 del respaldo real con su ACL y servicios de producción ficticios en 8000 y 3000.
 
 - Pasada completa: código 0 en unos 23 s; producción idéntica antes y después.
+- Regresión de rutas (23 casos), con los antecesores como en el VPS (`/` y
+  `/home` root 755, `/home/wilfredo` 750, `fp-staging` 700). Origen: el primer
+  intento real con `cd ~/fp-staging && sudo bash ./preparar-staging.sh` se
+  bloqueó con «/ debe ser de wilfredo», porque `$0` relativo se resolvía después
+  de `cd /`.
 - Nueva ejecución tras completar: código 0, nada que migrar.
 - Reanudación después de un fallo a mitad: continúa.
 - Bloqueos con código 2 y nada cambiado: rol, base o `/opt` ajenos con el

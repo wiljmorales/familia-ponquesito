@@ -24,6 +24,9 @@
 
 set -Eeuo pipefail
 umask 077
+# Ruta del script tal como se invocó, tomada ANTES de cambiar de directorio:
+# con «bash ./preparar-staging.sh», $0 es relativo al directorio de llamada.
+case "$0" in /*) SCRIPT_INVOCADO=$0 ;; *) SCRIPT_INVOCADO=$PWD/$0 ;; esac
 cd /
 
 MODO=${1:-}
@@ -70,7 +73,9 @@ MARCA="fp-staging: creado por preparar-staging.sh"
 MARCA_RESTAURADA="fp-staging: restaurada de ponquesito-20261018T133232Z"
 CLAVES_ENV="DJANGO_SECRET_KEY DJANGO_DEBUG DJANGO_ALLOWED_HOSTS DJANGO_BEHIND_HTTPS_PROXY POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD POSTGRES_HOST POSTGRES_PORT PONQUESITO_INTERNAL_API_KEY PONQUESITO_PRIVATE_IMAGE_ROOT PONQUESITO_API_PUBLIC_URL"
 
-PAQ=$(cd "$(dirname "$0")" && pwd)
+# Ubicación fija del paquete; comprobar_ubicacion exige que el script se
+# ejecute exactamente desde aquí, sin enlaces.
+PAQ=/home/$ADMIN/fp-staging
 ARCHIVOS_PAQUETE="preparar-staging.sh ponquesito-staging-backend.service backend-$DEPLOY_SHA.tar requirements-staging.txt"
 SELLO=$(date -u +%Y%m%dT%H%M%SZ)
 EVID=/home/$ADMIN/fp-staging/evidencia-$SELLO${MODO/--/-}
@@ -99,7 +104,8 @@ bloqueo() {
   [ "${#CAMBIOS[@]}" -eq 0 ] || fallo "$1"
   trap - ERR
   echo "!! BLOQUEO: $1"
-  echo "Nada se ha cambiado."
+  if [ -d "$EVID" ]; then echo "Nada se ha cambiado en el sistema; solo se escribió la evidencia en $EVID."
+  else echo "Nada se ha cambiado."; fi
   exit 2
 }
 trap 'fallo "orden inesperada falló en la línea $LINENO"' ERR
@@ -207,9 +213,43 @@ destino_bd() {
 }
 
 # --- Comprobaciones previas (solo lectura) ------------------------------------
-comprobar_host() {
+# ruta_segura <directorio> <privado|compartido>: cada componente desde / es un
+# directorio real (no un enlace) en el que nadie más puede escribir. Los del
+# sistema (/, /home) deben ser de root; desde /home/$ADMIN, de $ADMIN. Si es
+# privado, el último además no da ningún permiso a grupo ni a otros.
+ruta_segura() {
+  local destino=$1 tipo=$2 d dueno modo esperado
+  local -a cadena=()
+  [ "$(realpath -m -s -- "$destino")" = "$destino" ] || bloqueo "ruta no normalizada: $destino."
+  d=$destino
+  while :; do cadena=("$d" "${cadena[@]}"); [ "$d" = / ] && break; d=$(dirname -- "$d"); done
+  for d in "${cadena[@]}"; do
+    [ -d "$d" ] && [ ! -L "$d" ] || bloqueo "$d no es un directorio real (¿enlace?)."
+    read -r dueno modo < <(stat -c '%U %a' -- "$d")
+    case "$d/" in "/home/$ADMIN/"*) esperado=$ADMIN ;; *) esperado=root ;; esac
+    [ "$dueno" = "$esperado" ] || bloqueo "$d es de $dueno; se esperaba $esperado."
+    [ $((8#$modo & 8#022)) = 0 ] || bloqueo "$d ($modo) admite escritura de grupo u otros."
+  done
+  [ "$tipo" != privado ] || [ $((8#$modo & 8#077)) = 0 ] || bloqueo "$destino ($modo) debe ser privado: sin permisos de grupo ni otros."
+}
+archivo_seguro() {  # archivo_seguro <archivo>: regular, no enlace, de $ADMIN, sin escritura de terceros
+  local dueno modo
+  [ -f "$1" ] && [ ! -L "$1" ] || bloqueo "$1 no es un archivo regular (¿enlace?)."
+  read -r dueno modo < <(stat -c '%U %a' -- "$1")
+  [ "$dueno" = "$ADMIN" ] && [ $((8#$modo & 8#022)) = 0 ] || bloqueo "$1 ($dueno, $modo) debe ser de $ADMIN y sin escritura de grupo u otros."
+}
+# Antes de escribir nada: sudo desde $ADMIN y script en $PAQ por una ruta sin enlaces.
+comprobar_ubicacion() {
+  local logica fisica
   [ "$(id -u)" = 0 ] || bloqueo "ejecutar con sudo."
   [ "${SUDO_USER:-}" = "$ADMIN" ] || bloqueo "ejecutar como $ADMIN mediante sudo."
+  logica=$(realpath -m -s -- "$SCRIPT_INVOCADO")
+  fisica=$(realpath -e -- "$SCRIPT_INVOCADO" 2>/dev/null || true)
+  [ "$logica" = "$PAQ/preparar-staging.sh" ] && [ "$fisica" = "$logica" ] \
+    || bloqueo "el script debe ejecutarse como $PAQ/preparar-staging.sh, sin enlaces (invocado: $SCRIPT_INVOCADO)."
+  ruta_segura "$PAQ" privado
+}
+comprobar_host() {
   [ "$(hostname)" = "$HOST_ESPERADO" ] || bloqueo "host $(hostname); se esperaba $HOST_ESPERADO."
   . /etc/os-release
   [ "${VERSION_ID:-}" = "26.04" ] || bloqueo "Ubuntu ${VERSION_ID:-?}; se esperaba 26.04."
@@ -223,10 +263,10 @@ comprobar_host() {
 }
 comprobar_paquete() {
   local f
-  [ "$(stat -c %U "$PAQ")" = "$ADMIN" ] && [ "$(( $(stat -c %a "$PAQ") % 100 ))" = 0 ] \
-    || bloqueo "$PAQ debe ser de $ADMIN y sin permisos para grupo/otros."
-  for f in $ARCHIVOS_PAQUETE SHA256SUMS; do [ -f "$PAQ/$f" ] || bloqueo "falta $PAQ/$f."; done
-  [ -d "$PAQ/wheelhouse" ] || bloqueo "falta $PAQ/wheelhouse."
+  for f in $ARCHIVOS_PAQUETE SHA256SUMS; do [ -e "$PAQ/$f" ] || bloqueo "falta $PAQ/$f."; archivo_seguro "$PAQ/$f"; done
+  [ -e "$PAQ/wheelhouse" ] || bloqueo "falta $PAQ/wheelhouse."
+  ruta_segura "$PAQ/wheelhouse" privado
+  for f in "$PAQ"/wheelhouse/*; do archivo_seguro "$f"; done
   (cd "$PAQ" && sha256sum --quiet --strict -c SHA256SUMS) || bloqueo "SHA256SUMS del paquete no verifica."
   for f in $ARCHIVOS_PAQUETE; do grep -q "  $f\$" "$PAQ/SHA256SUMS" || bloqueo "$f no está en SHA256SUMS."; done
   [ "$(grep -c '  wheelhouse/' "$PAQ/SHA256SUMS")" = "$(find "$PAQ/wheelhouse" -type f | wc -l)" ] \
@@ -244,6 +284,8 @@ PY
 }
 comprobar_respaldo() {
   [ -f "$RESPALDO/SHA256SUMS" ] && [ ! -e "$RESPALDO/INCOMPLETO" ] || bloqueo "respaldo ausente o INCOMPLETO."
+  ruta_segura "$RESPALDO" privado
+  local f; for f in "$RESPALDO"/*; do archivo_seguro "$f"; done
   (cd "$RESPALDO" && sha256sum --quiet --strict -c SHA256SUMS) || bloqueo "SHA256SUMS del respaldo no verifica."
   [ "$(sha256sum "$RESPALDO/ponquesito.dump" | cut -d' ' -f1)" = "$DUMP_SHA256" ] || bloqueo "el volcado no tiene el SHA-256 fijado."
   echo "   respaldo verificado; volcado $DUMP_SHA256"
@@ -621,11 +663,13 @@ entregar_clave() {
 
 # --- Ejecución ----------------------------------------------------------------
 main() {
-  install -d -m 700 -o "$ADMIN" -g "$ADMIN" "/home/$ADMIN/fp-staging"
+  # Nada se escribe (ni la evidencia) hasta validar la ubicación del paquete.
+  comprobar_ubicacion
   mkdir -m 700 "$EVID"
   exec > >(tee -a "$EVID/registro.txt") 2>&1
   echo "Staging Familia Ponquesito ($MODO) — $SELLO en $(hostname)"
   echo "Comprobaciones previas (solo lectura)…"
+  echo "   ubicación: $PAQ/preparar-staging.sh; antecesores de root o $ADMIN, sin enlaces ni escritura de terceros"
   comprobar_host
   comprobar_paquete
   comprobar_respaldo
