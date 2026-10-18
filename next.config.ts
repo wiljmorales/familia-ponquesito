@@ -14,10 +14,10 @@ const nextConfig: NextConfig = {
   output: standalone ? "standalone" : undefined,
   experimental: {
     serverActions: {
-      // El formulario promete imágenes de hasta 5 MB; el límite por defecto
-      // de una Server Action es 1 MB. Margen para el multipart. Vercel
-      // impone además su propio tope de cuerpo: ver docs/supabase-to-django.md.
-      bodySizeLimit: "6mb",
+      // Imagen de hasta 4.000.000 bytes + campos + multipart (~4,01 MB en el
+      // peor caso válido). Debe quedar por debajo de los 4,5 MB que acepta
+      // una función de Vercel. upload-budget.test.ts comprueba ambos lados.
+      bodySizeLimit: 4_200_000,
     },
   },
   async rewrites() {

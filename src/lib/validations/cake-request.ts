@@ -16,7 +16,13 @@ const FLAVOR_VALUES = FORM_FLAVOR_OPTIONS.map((f) => f.value) as [
   ...string[],
 ];
 
-export const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+/** Máximo anunciado y aceptado (4 MB decimales). Django usa el mismo valor y,
+ * con el resto del formulario, la petición cabe en el límite de Vercel. */
+export const MAX_IMAGE_SIZE_BYTES = 4_000_000;
+export const MAX_IMAGE_SIZE_LABEL = "4 MB";
+/** Topes de entrada sin recortar: acotan el tamaño de la petición. */
+export const MAX_WHATSAPP_INPUT_LENGTH = 32;
+export const MAX_GUEST_COUNT_INPUT_LENGTH = 4;
 export const ACCEPTED_IMAGE_MIME_TYPES = [
   "image/jpeg",
   "image/png",
@@ -42,6 +48,7 @@ export const cakeRequestSchema = z.object({
     .string()
     .trim()
     .min(1, "Ingresa tu número de WhatsApp.")
+    .max(MAX_WHATSAPP_INPUT_LENGTH, "Ingresa un número de WhatsApp válido.")
     .refine((value) => {
       const digits = value.replace(/\D/g, "");
       return digits.length >= 7 && digits.length <= 15;
@@ -72,6 +79,7 @@ export const cakeRequestSchema = z.object({
     .string()
     .trim()
     .min(1, "Ingresa el número aproximado de personas.")
+    .max(MAX_GUEST_COUNT_INPUT_LENGTH, `Ingresa un número menor o igual a ${MAX_GUEST_COUNT}.`)
     .regex(/^\d+$/, "Ingresa solo números.")
     .transform((value) => Number(value))
     .refine((value) => value >= 1, "Debe ser al menos 1 persona.")

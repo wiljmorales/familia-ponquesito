@@ -7,6 +7,7 @@ vi.mock("@/leads/service", () => ({ processLead: vi.fn() }));
 
 import { backendPost } from "@/lib/backend/client";
 import { addDaysISO, businessTodayISO } from "@/lib/business-dates";
+import { MAX_IMAGE_SIZE_BYTES } from "@/lib/validations/cake-request";
 import { submitCakeRequest } from "./submit-cake-request";
 
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1]);
@@ -52,6 +53,24 @@ describe("submitCakeRequest → Django", () => {
 
     expect(result.ok).toBe(false);
     expect(result.fieldErrors?.referenceImage).toBeDefined();
+    expect(backendPost).not.toHaveBeenCalled();
+  });
+
+  it("acepta exactamente 4.000.000 bytes y rechaza uno más sin llamar a Django", async () => {
+    const image = (size: number) => {
+      const bytes = new Uint8Array(size);
+      bytes.set(JPEG);
+      return new File([bytes], "foto.jpg", { type: "image/jpeg" });
+    };
+
+    expect((await submitCakeRequest(form(image(MAX_IMAGE_SIZE_BYTES)))).ok).toBe(true);
+    const forwarded = (vi.mocked(backendPost).mock.calls[0][1] as FormData).get("reference_image") as File;
+    expect(forwarded.size).toBe(4_000_000);
+
+    vi.mocked(backendPost).mockClear();
+    const tooLarge = await submitCakeRequest(form(image(MAX_IMAGE_SIZE_BYTES + 1)));
+    expect(tooLarge.ok).toBe(false);
+    expect(tooLarge.fieldErrors?.referenceImage).toBe("La imagen supera el máximo de 4 MB.");
     expect(backendPost).not.toHaveBeenCalled();
   });
 });

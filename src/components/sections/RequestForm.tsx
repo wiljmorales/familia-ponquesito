@@ -10,7 +10,12 @@ import SelectField from "@/components/ui/SelectField";
 import TextareaField from "@/components/ui/TextareaField";
 import FileField from "@/components/ui/FileField";
 import type { CakeRequestValues } from "@/lib/validations/cake-request";
-import { cakeRequestSchema, minCelebrationDateString } from "@/lib/validations/cake-request";
+import {
+  cakeRequestSchema,
+  MAX_IMAGE_SIZE_BYTES,
+  MAX_IMAGE_SIZE_LABEL,
+  minCelebrationDateString,
+} from "@/lib/validations/cake-request";
 import { submitCakeRequest } from "@/lib/actions/submit-cake-request";
 import {
   CELEBRATION_TYPES,
@@ -44,7 +49,6 @@ const DEFAULT_VALUES: RequestFormValues = {
 
 type SubmitStatus = "idle" | "success" | "error";
 
-const MAX_IMAGE_MB = 5;
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 export default function RequestForm() {
@@ -88,8 +92,8 @@ export default function RequestForm() {
       return;
     }
 
-    if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
-      setImageError(`La imagen supera el máximo de ${MAX_IMAGE_MB} MB.`);
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      setImageError(`La imagen supera el máximo de ${MAX_IMAGE_SIZE_LABEL}.`);
       setImageFile(null);
       event.target.value = "";
       return;
@@ -280,7 +284,7 @@ export default function RequestForm() {
                 label="Referencia visual opcional"
                 name="referenceImage"
                 accept="image/jpeg,image/png,image/webp"
-                hint={`JPG, PNG o WebP. Máximo ${MAX_IMAGE_MB} MB.`}
+                hint={`JPG, PNG o WebP. Máximo ${MAX_IMAGE_SIZE_LABEL}.`}
                 error={imageError}
                 onChange={handleImageChange}
               />

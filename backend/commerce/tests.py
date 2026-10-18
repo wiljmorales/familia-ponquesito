@@ -316,3 +316,24 @@ class InternalApiTests(TransactionTestCase):
             call_command("cleanup_orphan_images", "--delete", stdout=StringIO())
             self.assertFalse(orphan.exists())
             self.assertTrue(referenced.exists() and recent.exists() and foreign.exists())
+
+    def test_image_limit_is_4_000_000_bytes(self):
+        with TemporaryDirectory() as image_root, override_settings(PRIVATE_IMAGE_ROOT=image_root):
+            fields = {
+                "customer_name": "Cliente sintético", "whatsapp": "+584120000000",
+                "email": "synthetic@example.invalid", "celebration_date": (business_today() + timedelta(days=30)).isoformat(),
+                "celebration_type": "cumpleanos", "guest_count": "10",
+                "preferred_flavor": "chocolate", "cake_description": "Descripción sintética suficiente",
+            }
+            header = b"\xff\xd8\xff\xe0"
+
+            def send(size):
+                image = SimpleUploadedFile("reference", header + b"\0" * (size - len(header)), content_type="image/jpeg")
+                return Client().post("/api/v1/internal/cake-request/", {**fields, "reference_image": image}, HTTP_AUTHORIZATION=f"Bearer {KEY}")
+
+            self.assertEqual(send(4_000_000).status_code, 200)
+            too_large = send(4_000_001)
+            self.assertEqual(too_large.status_code, 400)
+            self.assertEqual(too_large.json()["error"], "image_too_large")
+            self.assertEqual(CakeRequest.objects.count(), 1)
+            self.assertEqual(len(list(Path(image_root).iterdir())), 1)

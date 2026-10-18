@@ -46,7 +46,7 @@ usarlo rota el hash, sin crear otra reserva. Un correo fallido no invalida el
 enlace anterior. La IP en X-Forwarded-For es una defensa secundaria; la cuota
 por reserva persiste aunque se falsifique la IP.
 
-Las imágenes son JPG/PNG/WebP, máximo 5 MiB, comprobadas por firma y MIME
+Las imágenes son JPG/PNG/WebP, máximo 4 MB (4.000.000 bytes), comprobadas por firma y MIME
 (Next.js reenvía los bytes con el MIME detectado por firma, no el que declaró
 el navegador), con nombres aleatorios, permisos 0600 bajo
 `PONQUESITO_PRIVATE_IMAGE_ROOT` fuera de cualquier release. No hay ruta
@@ -55,11 +55,24 @@ firmada para una imagen asociada a una solicitud; la URL dura una hora,
 responde `no-store`, y Gunicorn registra rutas sin query strings. El directorio
 pertenece al usuario de servicio, no a Caddy ni al usuario de Next.js.
 
-Tamaño: las Server Actions tienen 1 MB por defecto; `next.config.ts` lo sube a
-6 MB para cumplir los 5 MiB del formulario. **En Vercel** las funciones no
-aceptan cuerpos de más de 4,5 MB, así que allí una imagen de entre ~4,4 y
-5 MiB fallará con el mensaje genérico. Decisión pendiente (no implementada):
-anunciar 4 MB o redimensionar en el navegador. Comprobarlo en Preview.
+Tamaño (decidido el 2026-10-18): 4.000.000 bytes en el formulario, la
+validación de la Server Action y Django (`MAX_IMAGE_SIZE_BYTES`,
+`MAX_IMAGE_BYTES`), con el mensaje «La imagen supera el máximo de 4 MB.».
+Presupuesto de la petición:
+
+| Pieza | Bytes |
+|---|---|
+| Peor caso válido medido (imagen 4.000.000 + campos al máximo en UTF-8 de 3 bytes + nombre de archivo de 255 bytes + multipart de React) | 4.004.761 |
+| `serverActions.bodySizeLimit` en `next.config.ts` (el defecto es 1 MB) | 4.200.000 |
+| Límite de cuerpo de una función de Vercel (4,5 MB, lectura decimal) | 4.500.000 |
+
+Para que el peor caso esté definido, `whatsapp` admite como máximo 32
+caracteres y `guestCount` 4. zod recorta espacios antes de medir, así que un
+relleno de espacios no está acotado por la validación; ese cuerpo supera
+`bodySizeLimit` y Next.js lo rechaza (413) antes de ejecutar la acción.
+`src/lib/validations/upload-budget.test.ts` mide el cuerpo y falla si deja
+de caber. **Pendiente en Vercel Preview**: subir una imagen de exactamente
+4.000.000 bytes con todos los campos al máximo y confirmar que llega a Django.
 
 Huérfanas: la API borra el archivo si falla el guardado. Si el proceso muere
 entre escribir el archivo y confirmar la fila, queda un huérfano;
@@ -158,6 +171,12 @@ Repetido sobre PostgreSQL 18 desechable, Node 22.23.3 (`.nvmrc`) y Python del
   Django lo guardó como `.jpg` 0600 en un directorio 0700, registró el lead y,
   sin SMTP, dejó el despacho en `failed` reintentable. Logs sin Bearer ni
   tokens. `/linktree` respondió 200 en esa compilación.
+
+Ajuste a 4 MB, con el mismo `next start` → proxy TLS → Django: imagen de
+4.000.000 bytes y campos al máximo (cuerpo 4.004.761) aceptada y guardada;
+4.000.001 rechazada con el mensaje de 4 MB sin llegar a Django; cuerpo de
+4.304.761 cortado por Next.js (`Body exceeded 4200000 limit`). Django rechaza
+4.000.001 (`image_too_large`) sin dejar fila ni archivo.
 
 No probado aquí: Vercel real (límite de 4,5 MB, Cron, `after()` en
 serverless, variables), Caddy/TLS real, Gmail SMTP, Gemini, VPS.

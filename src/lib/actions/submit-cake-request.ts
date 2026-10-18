@@ -1,7 +1,11 @@
 "use server";
 
 import { after } from "next/server";
-import { cakeRequestSchema, MAX_IMAGE_SIZE_BYTES } from "@/lib/validations/cake-request";
+import {
+  cakeRequestSchema,
+  MAX_IMAGE_SIZE_BYTES,
+  MAX_IMAGE_SIZE_LABEL,
+} from "@/lib/validations/cake-request";
 import { detectImageType } from "@/lib/utils/image-signature";
 import { backendPost } from "@/lib/backend/client";
 import { processLead } from "@/leads/service";
@@ -64,7 +68,7 @@ export async function submitCakeRequest(
       return {
         ok: false,
         message: "Revisa los datos marcados en el formulario.",
-        fieldErrors: { referenceImage: "La imagen supera el máximo de 5 MB." },
+        fieldErrors: { referenceImage: `La imagen supera el máximo de ${MAX_IMAGE_SIZE_LABEL}.` },
       };
     }
     const bytes = new Uint8Array(await file.arrayBuffer());

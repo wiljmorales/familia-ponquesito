@@ -643,3 +643,16 @@ historia. Consecuencias:
   5 MB fallará aunque el formulario la permita. Opciones: bajar el máximo
   anunciado a 4 MB o redimensionar en el navegador. No se elige sin
   Wilfredo/Frederik.
+
+## 2026-10-18 — Imagen de referencia: máximo 4 MB
+
+Wilfredo y Frederik fijan el máximo anunciado y aceptado en 4 MB
+(4.000.000 bytes), en lugar de 5 MB. Resuelve el límite pendiente de la
+entrada anterior: con 5 MB la petición no cabía en los 4,5 MB que acepta una
+función de Vercel. Formulario, Server Action, Django, mensajes y documentación
+usan el mismo valor. `serverActions.bodySizeLimit` pasa de 6 MB a 4.200.000
+bytes: cubre el peor caso válido medido (4.004.761 bytes) y queda por debajo
+de Vercel. `whatsapp` (32 caracteres) y `guestCount` (4) reciben un tope de
+entrada para que ese peor caso esté definido. Cálculo y pruebas en
+`docs/supabase-to-django.md`; la confirmación en Vercel Preview sigue
+pendiente.

@@ -28,7 +28,8 @@ from .models import (
     ReservationEvent, WeeklyReport,
 )
 
-MAX_IMAGE_BYTES = 5 * 1024 * 1024
+# Mismo máximo que Next.js (4 MB decimales); ver docs/supabase-to-django.md.
+MAX_IMAGE_BYTES = 4_000_000
 IMAGE_TYPES = {
     "jpg": "image/jpeg", "png": "image/png", "webp": "image/webp",
 }
