@@ -101,7 +101,7 @@ Coste: un puerto más (465/tcp) y un servicio más. Ambos se retiran con
 | `probar-correo.sh` | En local: el cliente de correo de la app contra Mailpit; buzón por túnel |
 | `verificar-imagen-preview.sh` | En local: verifica la prueba de la imagen hecha desde Preview |
 | `vercel-preview.env.example` | Variables de Preview para la rama (sin secretos) |
-| `test/https/` | Simulación: `preparar-sim.sh`, `instalar-paquete-sim.sh` y `probar-sim.sh`; sin VPS: `regresion-ufw.sh` (control de SSH en UFW) |
+| `test/https/` | Simulación: `preparar-sim.sh`, `instalar-paquete-sim.sh` y `probar-sim.sh`; sin VPS: `regresion-ufw.sh` (control de SSH en UFW) y `regresion-escucha.sh` (listeners de Mailpit y Caddy) |
 
 ## Qué hace `publicar-https.sh`
 
@@ -150,9 +150,20 @@ Después aplica solo lo que falte, y al final compara la foto de producción.
      (600) y sus hashes en `/etc/ponquesito-mailpit`.
   3. Instala las unidades y un drop-in con `LoadCredential` del certificado.
   4. Abre `allow 465/tcp` en UFW.
-  5. Verifica TLS por nombre, envío a `.invalid` aceptado, `gmail.com` → 550,
-     sin AUTH → 530, contraseña errónea → 535, SMTP sin TLS sin respuesta,
-     buzón y API de envío → 401, relay desactivado y mensaje recibido.
+  5. Verifica que los listeners son exactamente `tcp *:465` y
+     `tcp 127.0.0.1:8025`, tanto los de Mailpit como los de cualquier proceso
+     en esos puertos. Se comparan como conjunto en orden C, sin depender del
+     idioma, así que una 8025 pública, un puerto de más o UDP fallan. Verifica
+     también:
+     - TLS verificado por nombre y la configuración sin relay ni reenvío;
+     - envío a `.invalid` aceptado, `gmail.com` → 550, sin AUTH → 530,
+       contraseña errónea → 535 y SMTP sin TLS sin respuesta;
+     - buzón y API de envío → 401;
+     - relay desactivado por la API y mensaje recibido.
+
+     Con `--comprobar`, cuando las contraseñas de entrega ya se copiaron y se
+     borraron del VPS, se omiten, avisándolo, las pruebas que las necesitan;
+     esas se comprueban desde fuera con `probar-correo.sh`.
 - **`--retirar`**:
   1. Detiene y borra Mailpit (unidades, usuario, binario y buzón sintético).
   2. Vuelve a poner `DJANGO_BEHIND_HTTPS_PROXY=false` y reinicia staging.
@@ -316,12 +327,18 @@ En la simulación del VPS:
 regla SSH se crea como en el VPS, con el perfil (`ufw allow OpenSSH`). Su variante de paquete
 solo añade `acme_ca` de Pebble al Caddyfile, y lo comprueba.
 
+- `regresion-escucha.sh`, 32 casos: listeners en ambos órdenes, con el idioma
+  C y con `en_US.UTF-8`; 8025 en `*`, `0.0.0.0`, `[::]` o la IP pública, un
+  listener de más, UDP, 465 solo IPv4, de otro proceso o ausente; y Caddy.
+  Origen: el primer `--aplicar-correo` real terminó con código 1 porque
+  `sort`, con `LANG=en_US.UTF-8`, ordena `127.0.0.1:8025` antes que `*:465`. La
+  simulación usa ahora el idioma del VPS.
 - `regresion-ufw.sh`, 20 casos con la salida exacta de `ufw status verbose`
   del VPS. Origen: el primer `--comprobar` real bloqueó con «UFW no muestra
   SSH», porque la expresión anterior no aceptaba `22/tcp (OpenSSH)`.
 - Bloqueos con código 2, sin cambios en UFW, Caddy, puertos, staging ni Mailpit,
   y sin respaldos:
-  - DNS sin A o con AAAA;
+  - DNS hacia otra IP o con AAAA;
   - UFW inactivo, sin SSH, SSH solo desde un origen o con DENY antes del permiso;
   - Caddyfile ajeno;
   - puerto 80 ocupado;

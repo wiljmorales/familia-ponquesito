@@ -3,9 +3,11 @@
 # UFW y OpenSSL (publicar-https.sh).
 FROM ubuntu:26.04
 ENV DEBIAN_FRONTEND=noninteractive
+# Idioma del VPS (/etc/default/locale: LANG=en_US.UTF-8): cambia el orden de sort.
+ENV LANG=en_US.UTF-8
 RUN apt-get update && apt-get install -y --no-install-recommends systemd systemd-sysv dbus sudo locales \
       postgresql-18 postgresql-common python3 python3-venv iproute2 curl ca-certificates openssh-server ufw openssl \
-    && sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen && locale-gen en_US.UTF-8 \
+    && sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen && locale-gen en_US.UTF-8 && echo LANG=en_US.UTF-8 >/etc/default/locale \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 RUN userdel -r ubuntu 2>/dev/null; useradd -m -u 1000 -G sudo -s /bin/bash wilfredo && echo 'wilfredo ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/w \
     && echo ubuntu-4gb-hel1-1 > /etc/hostname

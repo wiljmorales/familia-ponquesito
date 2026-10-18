@@ -59,7 +59,7 @@ caso() {
   if grep -q '^Evidencia sellada: ' <<<"$salida"; then s=$(sellada "$texto") || { ok_=0; motivo="$motivo; $s"; }
   else ok_=0; motivo="$motivo; sin evidencia sellada"; fi
   if [ "$ok_" = 1 ]; then ok "$nombre (código $real, evidencia sellada)"
-  else mal "$nombre: $motivo"; grep -E '^!!|MAL|FALLO' <<<"$salida" | head -5 | sed 's/^/      /'; fi
+  else mal "$nombre: $motivo"; { grep -E '^!!|MAL|FALLO' <<<"$salida" || true; } | head -5 | sed 's/^/      /'; fi
 }
 
 echo "== Preparación"
@@ -76,7 +76,11 @@ INICIO=$(sim 'date "+%Y-%m-%d %H:%M:%S"')
 
 echo "== Bloqueos (código 2, sin cambios)"
 # /etc/hosts es un montaje de Docker: se reescribe en su sitio (sed -i no puede renombrarlo).
-caso "DNS sin registro A" --aplicar 2 "resuelve a 'nada'" "grep -v '$NOMBRE' /etc/hosts >/root/hosts; cat /root/hosts >/etc/hosts" "echo '37.27.149.66 $NOMBRE' >>/etc/hosts"
+# Con api-staging ya en el DNS público, quitarlo de /etc/hosts no simula su
+# ausencia: se apunta a otra IP (documentación, RFC 5737), que /etc/hosts fija.
+caso "DNS hacia otra IP" --aplicar 2 "resuelve a '203.0.113.10'" \
+  "grep -v '$NOMBRE' /etc/hosts >/root/hosts; echo '203.0.113.10 $NOMBRE' >>/root/hosts; cat /root/hosts >/etc/hosts" \
+  "grep -v '$NOMBRE' /etc/hosts >/root/hosts; echo '37.27.149.66 $NOMBRE' >>/root/hosts; cat /root/hosts >/etc/hosts"
 caso "DNS con AAAA" --aplicar 2 "tiene AAAA" "echo '2001:db8::1 $NOMBRE' >>/etc/hosts" "grep -v '^2001:db8::1 ' /etc/hosts >/root/hosts; cat /root/hosts >/etc/hosts"
 caso "UFW inactivo" --aplicar 2 "UFW no está activo" "ufw disable >/dev/null" "ufw --force enable >/dev/null"
 caso "SSH no permitido en UFW" --aplicar 2 "UFW no muestra SSH" "ufw delete allow OpenSSH >/dev/null" "ufw allow OpenSSH >/dev/null"
@@ -191,6 +195,9 @@ antes=$(sim 'systemctl show -p InvocationID --value ponquesito-mailpit')
 sim 'systemctl start ponquesito-mailpit-renovar.service'
 comprobar "renovación: Mailpit reiniciado por el temporizador" distinto "$([ "$(sim 'systemctl show -p InvocationID --value ponquesito-mailpit')" != "$antes" ] && echo distinto || echo igual)"
 caso "--comprobar con correo (verifica ambos)" --comprobar 0 "ok   mensaje de prueba recibido"
+caso "--comprobar sin las copias de entrega" --comprobar 0 "omitidas (contraseñas de entrega ya retiradas" \
+  "mv /home/wilfredo/fp-staging-https/entrega /root/entrega.sim" "mv /root/entrega.sim /home/wilfredo/fp-staging-https/entrega"
+comprobar "idioma de la simulación como en el VPS" en_US.UTF-8 "$(docker exec -u wilfredo "$C" bash -c 'sudo bash -c "echo \$LANG"')"
 
 echo "== Retirada"
 caso "--retirar" --retirar 0 "Listo (--retirar)"

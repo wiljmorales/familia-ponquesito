@@ -135,6 +135,11 @@ sys.exit(1)
 PY
 }
 escucha() { ss -Hltnu | awk '{print $1, $5}' | grep -E "[:.]$1\$" || true; }
+# Listeners como conjunto: líneas «protocolo dirección:puerto» exactas, sin
+# repetidos y en orden C. sort depende del idioma (en_US.UTF-8 ignora la
+# puntuación y pone «127.0.0.1:8025» antes que «*:465»); así no.
+conjunto() { LC_ALL=C sort -u | sed '/^$/d' | tr '\n' ' ' | sed 's/ $//'; }
+escucha_de() { ss -Hltnup 2>/dev/null | awk -v p="\"$1\"" 'index($0, p) {print $1, $5}' || true; }  # todos los del proceso <nombre>
 estado_unidad() { echo "$(systemctl is-active "$1" 2>/dev/null || true)/$(systemctl is-enabled "$1" 2>/dev/null || true)"; }
 ufw_regla() {  # ufw_regla <puerto>: nuestra|ajena|no
   local anadidas; anadidas=$(ufw show added)
@@ -445,7 +450,7 @@ print(codigo, json.loads("\n".join(cuerpo)).get("ok"))' 2>/dev/null || true)
     v "HTTP con Host $h" 404 "$(codigo curl -sS --max-time 5 -H "Host: $h" "http://127.0.0.1/health/")"
   done
   v "API de administración de Caddy (2019)" "" "$(escucha 2019)"
-  v "Caddy solo en TCP 80 y 443" "tcp *:443 tcp *:80" "$(ss -Hltnup 2>/dev/null | grep '"caddy"' | awk '{print $1, $5}' | sort | tr '\n' ' ' | sed 's/ $//')"
+  v "Caddy solo en TCP 80 y 443" "$(printf 'tcp *:443\ntcp *:80\n' | conjunto)" "$(escucha_de caddy | conjunto)"
   # Ni la firma de prueba ni la clave en el journal de Caddy.
   r=$(journalctl -u caddy.service --since "$inicio" --no-pager -o cat 2>/dev/null || true)
   v "journal de Caddy sin la firma" 0 "$(grep -cF -- "$firma" <<<"$r" || true)"
@@ -516,13 +521,22 @@ paso_correo() {
 verificar_correo() {
   echo "Verificación del SMTP de pruebas"
   FALLOS_V=0
-  v "Mailpit escucha" "tcp *:465 tcp 127.0.0.1:8025" "$( (escucha 465; escucha 8025) | sort | tr '\n' ' ' | sed 's/ $//')"
+  # Exactamente estos dos: todos los listeners de Mailpit, y cualquier proceso en 465/8025
+  # (8025 en otra dirección que 127.0.0.1, un puerto de más o UDP no coinciden).
+  v "Mailpit escucha (todos sus listeners)" "$(printf 'tcp *:465\ntcp 127.0.0.1:8025\n' | conjunto)" "$(escucha_de mailpit | conjunto)"
+  v "puertos 465 y 8025 (cualquier proceso)" "$(printf 'tcp *:465\ntcp 127.0.0.1:8025\n' | conjunto)" "$( (escucha 465; escucha 8025) | conjunto)"
   v "certificado SMTP verificado por nombre" ok "$(openssl s_client -connect 127.0.0.1:465 -servername "$NOMBRE" -verify_hostname "$NOMBRE" -verify_return_error </dev/null 2>/dev/null | grep -q 'Verify return code: 0 (ok)' && echo ok || echo no)"
-  local r
-  r=$(python3 -I - "$NOMBRE" "$ENTREGA/smtp-password" "$MP_SMTP_USUARIO" "$SELLO" <<'PY'
+  # Sin relay ni reenvío en la configuración del servicio (no necesita contraseña).
+  v "configuración sin relay ni reenvío" 0 "$(systemctl show -p ExecStart -p Environment "$MP_UNIDAD" | grep -ciE 'relay|forward' || true)"
+  # Las pruebas autenticadas usan las contraseñas de entrega. Cuando ya se
+  # copiaron a almacenamiento privado y se borraron del VPS, se omiten aquí y se
+  # comprueban desde fuera con deploy/staging/probar-correo.sh.
+  local r con_entrega=0
+  [ -r "$ENTREGA/smtp-password" ] && [ -r "$ENTREGA/ui-password" ] && con_entrega=1
+  r=$(python3 -I - "$NOMBRE" "$([ "$con_entrega" = 1 ] && echo "$ENTREGA/smtp-password")" "$MP_SMTP_USUARIO" "$SELLO" <<'PY'
 import smtplib, socket, ssl, sys
 nombre, archivo, usuario, sello = sys.argv[1:]
-clave = open(archivo).read().strip()
+clave = open(archivo).read().strip() if archivo else None
 ctx = ssl.create_default_context()
 class SMTPS(smtplib.SMTP):
     def _get_socket(self, host, port, timeout):
@@ -538,8 +552,9 @@ def resultado(f):
     except smtplib.SMTPAuthenticationError as e: return "rechazado " + str(e.smtp_code)
     except Exception as e: return type(e).__name__
 msg = f"From: preview@example.invalid\r\nTo: verificacion@example.invalid\r\nSubject: fp-staging-https {sello}\r\n\r\nPrueba del SMTP de Preview.\r\n"
-print("aceptado|" + resultado(lambda: sesion().sendmail("preview@example.invalid", ["verificacion@example.invalid"], msg) or "aceptado"))
-print("gmail|" + resultado(lambda: sesion().sendmail("preview@example.invalid", ["alguien@gmail.com"], msg)))
+if clave:
+    print("aceptado|" + resultado(lambda: sesion().sendmail("preview@example.invalid", ["verificacion@example.invalid"], msg) or "aceptado"))
+    print("gmail|" + resultado(lambda: sesion().sendmail("preview@example.invalid", ["alguien@gmail.com"], msg)))
 print("sin_auth|" + resultado(lambda: sesion(False).sendmail("preview@example.invalid", ["verificacion@example.invalid"], msg)))
 print("clave_mala|" + resultado(lambda: sesion(True, "fp-prueba-no-valida")))
 def plano():
@@ -549,14 +564,21 @@ def plano():
 print("plano|" + plano())
 PY
 )
-  v "envío autenticado a @example.invalid" aceptado "$(sed -n 's/^aceptado|//p' <<<"$r")"
-  v "destinatario real (gmail.com)" "rechazado 550" "$(sed -n 's/^gmail|//p' <<<"$r")"
+  if [ "$con_entrega" = 1 ]; then
+    v "envío autenticado a @example.invalid" aceptado "$(sed -n 's/^aceptado|//p' <<<"$r")"
+    v "destinatario real (gmail.com)" "rechazado 550" "$(sed -n 's/^gmail|//p' <<<"$r")"
+  fi
   v "sin AUTH" "rechazado 530" "$(sed -n 's/^sin_auth|//p' <<<"$r")"
   v "contraseña errónea" "rechazado 535" "$(sed -n 's/^clave_mala|//p' <<<"$r")"
   v "SMTP sin TLS en 465" sin-banner "$(sed -n 's/^plano|//p' <<<"$r")"
-  local ui; ui=$(cat "$ENTREGA/ui-password")
   v "interfaz sin credencial" 401 "$(codigo curl -sS --max-time 5 http://127.0.0.1:8025/api/v1/messages)"
   v "API de envío sin credencial" 401 "$(codigo curl -sS --max-time 5 -X POST -d '{}' http://127.0.0.1:8025/api/v1/send)"
+  if [ "$con_entrega" = 0 ]; then
+    echo "   omitidas (contraseñas de entrega ya retiradas de $ENTREGA): envío autenticado, gmail.com → 550, relay por la API y mensaje recibido; comprobarlas con deploy/staging/probar-correo.sh"
+    [ "$FALLOS_V" = 0 ] || fallo "$FALLOS_V comprobaciones del correo no coinciden."
+    return
+  fi
+  local ui; ui=$(cat "$ENTREGA/ui-password")
   r=$(printf 'user = "%s:%s"\n' "$MP_UI_USUARIO" "$ui" | curl -sS --max-time 5 -K - http://127.0.0.1:8025/api/v1/webui 2>/dev/null | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["MessageRelay"]["Enabled"])' 2>/dev/null || true)
   v "reenvío (relay) desactivado" False "$r"
   r=$(printf 'user = "%s:%s"\n' "$MP_UI_USUARIO" "$ui" | curl -sS --max-time 5 -K - "http://127.0.0.1:8025/api/v1/search?query=subject:%22fp-staging-https%20$SELLO%22" 2>/dev/null | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["messages_count"])' 2>/dev/null || true)
