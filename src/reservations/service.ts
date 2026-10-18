@@ -1,6 +1,5 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { getSupabaseServiceClient } from "@/lib/supabase/server";
+import { backendPost } from "@/lib/backend/client";
 import { generateReferenceCode } from "@/lib/reference-code";
 import { generateManageToken, hashManageToken } from "./token";
 import type { CapacityPoints } from "./capacity";
@@ -14,9 +13,8 @@ import type {
 } from "./types";
 
 /**
- * Servicio de reservas de Agenda Ponquesito (Reto 8). Envuelve los RPC de
- * supabase/schema.sql — que son la autoridad final sobre capacidad y
- * reglas — y añade lo que solo puede hacer el servidor Node: generar el
+ * Servicio de reservas de Agenda Ponquesito (Reto 8). Llama a Django,
+ * autoridad final sobre capacidad y reglas, y añade lo que hace Node: generar el
  * código legible FP-8-XXXX (con reintento si colisiona) y el token privado
  * de gestión (que se devuelve al llamador SOLO para construir el enlace
  * del correo; jamás se registra en logs).
@@ -26,13 +24,13 @@ const RESERVATION_CODE_PREFIX = "FP-8";
 const MAX_CODE_ATTEMPTS = 5;
 
 export interface ReservationServiceDeps {
-  /** Inyectable para pruebas; por defecto el cliente real (service_role). */
-  supabase?: SupabaseClient;
+  /** Transporte inyectable solo en pruebas; en producción usa Django. */
+  post?: typeof backendPost;
 }
 
 /**
  * Errores que puede devolver el servicio: los códigos de negocio de los
- * RPC más "service_unavailable" (fallo de red/configuración de Supabase,
+ * servicio más "service_unavailable" (fallo de red/configuración de Django,
  * sin detalle sensible para el cliente).
  */
 export type ReservationServiceError = ReservationErrorCode | "service_unavailable";
@@ -126,31 +124,31 @@ export async function createReservation(
   input: CreateReservationInput,
   deps: ReservationServiceDeps = {},
 ): Promise<CreateReservationResult> {
-  const supabase = deps.supabase ?? getSupabaseServiceClient();
+  const post = deps.post ?? backendPost;
   const { token, tokenHash } = generateManageToken();
 
   for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
     const code = generateReferenceCode(RESERVATION_CODE_PREFIX);
-    const { data, error } = await supabase.rpc("reserve_production_slot", {
-      p_celebration_date: input.celebrationDate,
-      p_capacity_points: input.capacityPoints,
-      p_code: code,
-      p_manage_token_hash: tokenHash,
-      p_status: input.status,
-      p_customer_name: input.customerName,
-      p_customer_email: input.customerEmail,
-      p_customer_phone: input.customerPhone,
-      p_guest_count: input.guestCount,
-      p_flavor: input.flavor,
-      p_theme: input.theme ?? null,
-      p_fulfillment_type: input.fulfillmentType,
-      p_delivery_details: input.deliveryDetails ?? null,
-      p_reference_image_path: input.referenceImagePath ?? null,
-      p_order_details: input.orderDetails,
-    });
-
-    if (error || data == null) {
-      console.error("[reservations] reserve_production_slot falló:", error?.message);
+    let data: RpcPayload;
+    try {
+      data = await post<RpcPayload>("agenda-reserve", {
+        celebration_date: input.celebrationDate,
+        capacity_points: input.capacityPoints,
+        code,
+        manage_token_hash: tokenHash,
+        status: input.status,
+        customer_name: input.customerName,
+        customer_email: input.customerEmail,
+        customer_phone: input.customerPhone,
+        guest_count: input.guestCount,
+        flavor: input.flavor,
+        theme: input.theme ?? null,
+        fulfillment_type: input.fulfillmentType,
+        delivery_details: input.deliveryDetails ?? null,
+        reference_image_path: input.referenceImagePath ?? null,
+        order_details: input.orderDetails,
+      });
+    } catch {
       return { ok: false, error: "service_unavailable" };
     }
 
@@ -195,19 +193,15 @@ export async function getAvailability(
   capacityPoints: CapacityPoints,
   deps: ReservationServiceDeps = {},
 ): Promise<GetAvailabilityResult> {
-  const supabase = deps.supabase ?? getSupabaseServiceClient();
-  const { data, error } = await supabase.rpc("get_production_availability", {
-    p_start_date: startDate,
-    p_end_date: endDate,
-    p_capacity_points: capacityPoints,
-  });
-
-  if (error || data == null) {
-    console.error("[reservations] get_production_availability falló:", error?.message);
+  let data: { ok: boolean; days?: AvailabilityRow[] };
+  try {
+    data = await (deps.post ?? backendPost)("agenda-availability", {
+      start_date: startDate, end_date: endDate, capacity_points: capacityPoints,
+    });
+  } catch {
     return { ok: false, error: "service_unavailable" };
   }
-
-  return { ok: true, days: data as AvailabilityRow[] };
+  return data.ok && data.days ? { ok: true, days: data.days } : { ok: false, error: "service_unavailable" };
 }
 
 export type LookupReservationResult =
@@ -219,14 +213,10 @@ export async function lookupReservation(
   manageToken: string,
   deps: ReservationServiceDeps = {},
 ): Promise<LookupReservationResult> {
-  const supabase = deps.supabase ?? getSupabaseServiceClient();
-  const { data, error } = await supabase.rpc("get_cake_reservation", {
-    p_code: code,
-    p_manage_token_hash: hashManageToken(manageToken),
-  });
-
-  if (error || data == null) {
-    console.error("[reservations] get_cake_reservation falló:", error?.message);
+  let data: LookupRpcPayload;
+  try {
+    data = await (deps.post ?? backendPost)("agenda-lookup", { code, token_hash: hashManageToken(manageToken) });
+  } catch {
     return { ok: false, error: "service_unavailable" };
   }
 
@@ -274,15 +264,12 @@ export async function rescheduleReservation(
   newDate: string,
   deps: ReservationServiceDeps = {},
 ): Promise<ManageReservationResult> {
-  const supabase = deps.supabase ?? getSupabaseServiceClient();
-  const { data, error } = await supabase.rpc("reschedule_cake_reservation", {
-    p_code: code,
-    p_manage_token_hash: hashManageToken(manageToken),
-    p_new_date: newDate,
-  });
-
-  if (error || data == null) {
-    console.error("[reservations] reschedule_cake_reservation falló:", error?.message);
+  let data: RpcPayload;
+  try {
+    data = await (deps.post ?? backendPost)("agenda-reschedule", {
+      code, token_hash: hashManageToken(manageToken), new_date: newDate,
+    });
+  } catch {
     return { ok: false, error: "service_unavailable" };
   }
 
@@ -294,14 +281,10 @@ export async function cancelReservation(
   manageToken: string,
   deps: ReservationServiceDeps = {},
 ): Promise<ManageReservationResult> {
-  const supabase = deps.supabase ?? getSupabaseServiceClient();
-  const { data, error } = await supabase.rpc("cancel_cake_reservation", {
-    p_code: code,
-    p_manage_token_hash: hashManageToken(manageToken),
-  });
-
-  if (error || data == null) {
-    console.error("[reservations] cancel_cake_reservation falló:", error?.message);
+  let data: RpcPayload;
+  try {
+    data = await (deps.post ?? backendPost)("agenda-cancel", { code, token_hash: hashManageToken(manageToken) });
+  } catch {
     return { ok: false, error: "service_unavailable" };
   }
 

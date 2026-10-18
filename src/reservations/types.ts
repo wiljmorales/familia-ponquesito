@@ -1,7 +1,7 @@
 /**
  * Contratos del dominio de Agenda Ponquesito (Reto 8): reservas de
  * capacidad diaria de producción. La autoridad sobre capacidad, bloqueos y
- * estados que consumen cupo es PostgreSQL (ver supabase/schema.sql,
+ * estados que consumen cupo es PostgreSQL (ver backend/commerce/reservations.py,
  * sección Reto 8); estos tipos describen ese contrato del lado TypeScript
  * y src/reservations/sql-alignment.test.ts vigila que no diverjan.
  */

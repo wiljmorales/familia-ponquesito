@@ -3,10 +3,8 @@
  * (Reto 8). Los "puntos" son una regla interna del negocio: miden carga de
  * producción, no precio, y jamás se muestran al cliente con ese nombre.
  *
- * IMPORTANTE: la autoridad en tiempo de ejecución es PostgreSQL — los
- * helpers agenda_default_capacity(), agenda_min_lead_days() y
- * agenda_booking_window_days() de supabase/schema.sql deben mantenerse
- * alineados con estas constantes. sql-alignment.test.ts falla si divergen.
+ * IMPORTANTE: la autoridad en tiempo de ejecución es Django/PostgreSQL.
+ * sql-alignment.test.ts comprueba los espejos de interfaz.
  */
 
 /** Capacidad de producción por día (en puntos) cuando no hay override. */

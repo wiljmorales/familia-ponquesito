@@ -54,7 +54,7 @@ export interface ProcessLeadInput {
    * genera uno nuevo con el prefijo de la fuente.
    */
   referenceCode?: string;
-  /** Solo Reto 2: ruta del objeto en el bucket privado cake-references. */
+  /** Solo Reto 2: nombre opaco del archivo privado del backend. */
   referenceImagePath?: string | null;
   /** Solo Reto 8: datos seguros de la reserva; nunca secretos transitorios. */
   reservation?: ReservationLeadDetails;

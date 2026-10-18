@@ -4,8 +4,7 @@ import { connection } from "next/server";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import SectionHeading, { Em } from "@/components/ui/SectionHeading";
-import { getSupabaseServiceClient } from "@/lib/supabase/server";
-import { WEEKLY_REPORTS_TABLE } from "@/lib/supabase/config";
+import { backendPost } from "@/lib/backend/client";
 import { DATA_DISCLAIMER } from "@/reports/metrics";
 import {
   AutomationStatus,
@@ -19,7 +18,7 @@ import {
 export const metadata: Metadata = {
   title: "Pulso Ponquesito — Reporte semanal | Familia Ponquesito",
   description:
-    "El reporte que se arma y se envía solo: cada lunes, la actividad registrada en Supabase se convierte en métricas y un resumen ejecutivo que llega por correo al negocio. Datos agregados y anonimizados.",
+    "El reporte que se arma y se envía solo: cada lunes, la actividad registrada en PostgreSQL se convierte en métricas y un resumen ejecutivo que llega por correo al negocio. Datos agregados y anonimizados.",
 };
 
 /**
@@ -33,42 +32,18 @@ async function fetchReports(): Promise<
   { ok: true; latest: LatestReportRow | null; history: HistoryRow[] } | { ok: false }
 > {
   try {
-    const supabase = getSupabaseServiceClient();
-
-    const { data: latest, error: latestError } = await supabase
-      .from(WEEKLY_REPORTS_TABLE)
-      .select(
-        "period_start, period_end, status, trigger_type, summary, summary_source, metrics, generated_at",
-      )
-      .order("generated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (latestError) {
-      console.error("[reports] fallo al consultar el último reporte para la página", latestError);
-      return { ok: false };
-    }
-
-    const { data: history, error: historyError } = await supabase
-      .from(WEEKLY_REPORTS_TABLE)
-      .select("period_start, period_end, trigger_type, status, generated_at")
-      .order("generated_at", { ascending: false })
-      .limit(5);
-
-    if (historyError) {
-      console.error("[reports] fallo al consultar el historial para la página", historyError);
-      return { ok: false };
-    }
+    const result = await backendPost<{ ok: boolean; latest: LatestReportRow | null; history: HistoryRow[] }>("report-list", {});
+    if (!result.ok) return { ok: false };
 
     return {
       ok: true,
-      latest: (latest as LatestReportRow | null) ?? null,
-      history: (history ?? []) as HistoryRow[],
+      latest: result.latest,
+      history: result.history,
     };
-  } catch (error) {
-    // Incluye Supabase sin configurar: la página degrada con un mensaje
+  } catch {
+    // Incluye Django sin configurar: la página degrada con un mensaje
     // amable; el detalle queda solo en el log del servidor.
-    console.error("[reports] no se pudo cargar la página del reporte semanal", error);
+    console.error("[reports] no se pudo cargar la página del reporte semanal");
     return { ok: false };
   }
 }

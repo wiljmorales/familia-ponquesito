@@ -40,6 +40,9 @@ export default async function ReservationPage({
           >
             Volver a la agenda
           </Link>
+          <p className="mt-5 text-sm text-text-secondary">
+            ¿Perdiste el enlace? <Link href="/agenda/recuperar" className="text-terracotta underline">Solicita uno nuevo</Link>.
+          </p>
         </section>
       </main>
     );

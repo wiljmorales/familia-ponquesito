@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 // service.ts (y sus dependencias) importan "server-only"; en Vitest no hay
 // runtime de React Server Components, así que se anula el paquete.
@@ -12,6 +11,7 @@ import {
   lookupReservation,
   rescheduleReservation,
   type CreateReservationInput,
+  type ReservationServiceDeps,
 } from "./service";
 import { hashManageToken } from "./token";
 
@@ -39,15 +39,26 @@ interface RpcCall {
 function fakeSupabase(responses: Array<{ data?: unknown; error?: { message: string } | null }>) {
   const calls: RpcCall[] = [];
   let index = 0;
-  const supabase = {
-    rpc: vi.fn(async (fn: string, params: Record<string, unknown>) => {
-      calls.push({ fn, params });
+  const operationMap: Record<string, string> = {
+    "agenda-reserve": "reserve_production_slot", "agenda-availability": "get_production_availability",
+    "agenda-lookup": "get_cake_reservation", "agenda-reschedule": "reschedule_cake_reservation",
+    "agenda-cancel": "cancel_cake_reservation",
+  };
+  const post = vi.fn(async (operation: string, payload: Record<string, unknown> | FormData) => {
+      const params = Object.fromEntries(Object.entries(payload).map(([key, value]) => [
+        key === "code" ? "p_code" : key === "token_hash" || key === "manage_token_hash" ? "p_manage_token_hash" :
+        key === "start_date" ? "p_start_date" : key === "end_date" ? "p_end_date" :
+        key === "new_date" ? "p_new_date" : `p_${key}`,
+        value,
+      ]));
+      calls.push({ fn: operationMap[operation], params });
       const response = responses[Math.min(index, responses.length - 1)];
       index += 1;
-      return { data: response.data ?? null, error: response.error ?? null };
-    }),
-  } as unknown as SupabaseClient;
-  return { supabase, calls };
+      if (response.error) throw new Error(response.error.message);
+      if (operation === "agenda-availability") return { ok: true, days: response.data };
+      return response.data;
+  });
+  return { post: post as unknown as NonNullable<ReservationServiceDeps["post"]>, calls };
 }
 
 beforeEach(() => {
@@ -56,7 +67,7 @@ beforeEach(() => {
 
 describe("createReservation", () => {
   it("reserva con éxito: genera código FP-8 y devuelve el token en claro", async () => {
-    const { supabase, calls } = fakeSupabase([
+    const { post, calls } = fakeSupabase([
       {
         data: {
           ok: true,
@@ -70,7 +81,7 @@ describe("createReservation", () => {
       },
     ]);
 
-    const result = await createReservation(baseInput(), { supabase });
+    const result = await createReservation(baseInput(), { post });
 
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -91,18 +102,18 @@ describe("createReservation", () => {
   });
 
   it("propaga capacity_unavailable sin reintentar", async () => {
-    const { supabase, calls } = fakeSupabase([
+    const { post, calls } = fakeSupabase([
       { data: { ok: false, error: "capacity_unavailable", capacity_remaining: 1 } },
     ]);
 
-    const result = await createReservation(baseInput(), { supabase });
+    const result = await createReservation(baseInput(), { post });
 
     expect(result).toEqual({ ok: false, error: "capacity_unavailable" });
     expect(calls).toHaveLength(1);
   });
 
   it("reintenta con otro código cuando el RPC devuelve code_taken", async () => {
-    const { supabase, calls } = fakeSupabase([
+    const { post, calls } = fakeSupabase([
       { data: { ok: false, error: "code_taken" } },
       {
         data: {
@@ -117,7 +128,7 @@ describe("createReservation", () => {
       },
     ]);
 
-    const result = await createReservation(baseInput(), { supabase });
+    const result = await createReservation(baseInput(), { post });
 
     expect(result.ok).toBe(true);
     expect(calls).toHaveLength(2);
@@ -126,18 +137,18 @@ describe("createReservation", () => {
   });
 
   it("se rinde tras 5 colisiones de código", async () => {
-    const { supabase, calls } = fakeSupabase([{ data: { ok: false, error: "code_taken" } }]);
+    const { post, calls } = fakeSupabase([{ data: { ok: false, error: "code_taken" } }]);
 
-    const result = await createReservation(baseInput(), { supabase });
+    const result = await createReservation(baseInput(), { post });
 
     expect(result).toEqual({ ok: false, error: "code_taken" });
     expect(calls).toHaveLength(5);
   });
 
   it("devuelve service_unavailable ante un fallo de transporte, sin filtrar detalles", async () => {
-    const { supabase } = fakeSupabase([{ data: null, error: { message: "boom" } }]);
+    const { post } = fakeSupabase([{ data: null, error: { message: "boom" } }]);
 
-    const result = await createReservation(baseInput(), { supabase });
+    const result = await createReservation(baseInput(), { post });
 
     expect(result).toEqual({ ok: false, error: "service_unavailable" });
   });
@@ -155,9 +166,9 @@ describe("getAvailability", () => {
         can_accept: true,
       },
     ];
-    const { supabase, calls } = fakeSupabase([{ data: rows }]);
+    const { post, calls } = fakeSupabase([{ data: rows }]);
 
-    const result = await getAvailability("2026-08-01", "2026-08-31", 2, { supabase });
+    const result = await getAvailability("2026-08-01", "2026-08-31", 2, { post });
 
     expect(result).toEqual({ ok: true, days: rows });
     expect(calls[0].fn).toBe("get_production_availability");
@@ -169,15 +180,15 @@ describe("getAvailability", () => {
   });
 
   it("devuelve service_unavailable si el RPC falla", async () => {
-    const { supabase } = fakeSupabase([{ data: null, error: { message: "boom" } }]);
-    const result = await getAvailability("2026-08-01", "2026-08-31", 1, { supabase });
+    const { post } = fakeSupabase([{ data: null, error: { message: "boom" } }]);
+    const result = await getAvailability("2026-08-01", "2026-08-31", 1, { post });
     expect(result).toEqual({ ok: false, error: "service_unavailable" });
   });
 });
 
 describe("lookupReservation", () => {
   it("envía solo código y hash, y devuelve una proyección pública cerrada", async () => {
-    const { supabase, calls } = fakeSupabase([
+    const { post, calls } = fakeSupabase([
       {
         data: {
           ok: true,
@@ -204,7 +215,7 @@ describe("lookupReservation", () => {
       },
     ]);
 
-    const result = await lookupReservation("FP-8-TEST", "token-claro", { supabase });
+    const result = await lookupReservation("FP-8-TEST", "token-claro", { post });
 
     expect(calls[0]).toEqual({
       fn: "get_cake_reservation",
@@ -228,17 +239,17 @@ describe("lookupReservation", () => {
     const second = fakeSupabase([response]);
 
     await expect(
-      lookupReservation("FP-8-NOPE", "token-valido", { supabase: first.supabase }),
+      lookupReservation("FP-8-NOPE", "token-valido", { post: first.post }),
     ).resolves.toEqual({ ok: false, error: "reservation_not_found" });
     await expect(
-      lookupReservation("FP-8-TEST", "token-malo", { supabase: second.supabase }),
+      lookupReservation("FP-8-TEST", "token-malo", { post: second.post }),
     ).resolves.toEqual({ ok: false, error: "reservation_not_found" });
   });
 });
 
 describe("rescheduleReservation", () => {
   it("envía el hash del token (nunca el token) y mapea la respuesta", async () => {
-    const { supabase, calls } = fakeSupabase([
+    const { post, calls } = fakeSupabase([
       {
         data: {
           ok: true,
@@ -252,7 +263,7 @@ describe("rescheduleReservation", () => {
     ]);
 
     const result = await rescheduleReservation("FP-8-TEST", "token-claro", "2026-08-12", {
-      supabase,
+      post,
     });
 
     expect(calls[0].fn).toBe("reschedule_cake_reservation");
@@ -268,17 +279,17 @@ describe("rescheduleReservation", () => {
   });
 
   it("propaga los códigos de error del RPC", async () => {
-    const { supabase } = fakeSupabase([
+    const { post } = fakeSupabase([
       { data: { ok: false, error: "change_window_closed" } },
     ]);
-    const result = await rescheduleReservation("FP-8-TEST", "token", "2026-08-12", { supabase });
+    const result = await rescheduleReservation("FP-8-TEST", "token", "2026-08-12", { post });
     expect(result).toEqual({ ok: false, error: "change_window_closed" });
   });
 });
 
 describe("cancelReservation", () => {
   it("cancela y mapea la respuesta", async () => {
-    const { supabase, calls } = fakeSupabase([
+    const { post, calls } = fakeSupabase([
       {
         data: {
           ok: true,
@@ -290,7 +301,7 @@ describe("cancelReservation", () => {
       },
     ]);
 
-    const result = await cancelReservation("FP-8-TEST", "token-claro", { supabase });
+    const result = await cancelReservation("FP-8-TEST", "token-claro", { post });
 
     expect(calls[0].fn).toBe("cancel_cake_reservation");
     expect(calls[0].params.p_manage_token_hash).toBe(hashManageToken("token-claro"));
@@ -298,10 +309,10 @@ describe("cancelReservation", () => {
   });
 
   it("devuelve el mismo error para código o token inválidos (anti-enumeración)", async () => {
-    const { supabase } = fakeSupabase([
+    const { post } = fakeSupabase([
       { data: { ok: false, error: "reservation_not_found" } },
     ]);
-    const result = await cancelReservation("FP-8-XXXX", "token-malo", { supabase });
+    const result = await cancelReservation("FP-8-XXXX", "token-malo", { post });
     expect(result).toEqual({ ok: false, error: "reservation_not_found" });
   });
 });

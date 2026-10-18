@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { GenerateWeeklyReportDeps } from "./service";
 
 // service.ts (y sus dependencias) importan "server-only"; en Vitest no hay
 // bundler que distinga cliente/servidor, así que se neutraliza aquí.
@@ -35,10 +35,38 @@ class FakeReportsDb {
   selectQueries: Array<{ table: string; filters: Filter[]; head: boolean }> = [];
   private nextId = 1;
 
-  client(): SupabaseClient {
-    return {
-      from: (table: string) => new FakeQueryBuilder(this, table),
-    } as unknown as SupabaseClient;
+  client(): NonNullable<GenerateWeeklyReportDeps["post"]> {
+    return (async (operation: string, payload: Record<string, unknown> | FormData) => {
+      const p = payload as Record<string, unknown>;
+      if (operation === "report-reserve") {
+        const result = this.insertRow("weekly_reports", { ...p, status: "processing" });
+        return result.error ? { ok: false, error: "duplicate" } : { ok: true, id: result.data?.id };
+      }
+      if (operation === "report-update") {
+        const row = this.tables.weekly_reports.find(item => item.id === p.id);
+        if (row) Object.assign(row, p);
+        return { ok: Boolean(row) };
+      }
+      if (operation === "report-data") {
+        const periodFilters: Filter[] = [["gte", "created_at", p.start_utc], ["lt", "created_at", p.end_exclusive_utc]];
+        const upcomingFilters: Filter[] = [["gte", "celebration_date", p.upcoming_from], ["lte", "celebration_date", p.upcoming_to]];
+        this.selectQueries.push({ table: "leads", filters: periodFilters, head: false });
+        this.selectQueries.push({ table: "leads", filters: [], head: true });
+        this.selectQueries.push({ table: "leads", filters: upcomingFilters, head: true });
+        this.selectQueries.push({ table: "lead_automation_events", filters: periodFilters, head: false });
+        if (this.failSelects.has("leads")) return { ok: false };
+        const project = (row: FakeRow, fields: string[]) => Object.fromEntries(fields.map(field => [field, row[field]]));
+        const inPeriod = (row: FakeRow) => String(row.created_at) >= String(p.start_utc) && String(row.created_at) < String(p.end_exclusive_utc);
+        return {
+          ok: true,
+          leads_in_period: this.tables.leads.filter(inPeriod).map(row => project(row, ["id", "source_type", "celebration_date", "priority", "created_at"])),
+          total_leads: this.tables.leads.length,
+          upcoming_celebrations: this.tables.leads.filter(row => String(row.celebration_date) >= String(p.upcoming_from) && String(row.celebration_date) <= String(p.upcoming_to)).length,
+          events_in_period: this.tables.lead_automation_events.filter(inPeriod).map(row => project(row, ["lead_id", "event_type", "status", "created_at"])),
+        };
+      }
+      throw new Error(`Unexpected test operation: ${operation}`);
+    }) as NonNullable<GenerateWeeklyReportDeps["post"]>;
   }
 
   insertRow(table: string, row: Record<string, unknown>) {
@@ -64,109 +92,6 @@ class FakeReportsDb {
     const stored: FakeRow = { id: `row-${this.nextId++}`, ...row };
     this.tables[table].push(stored);
     return { data: stored, error: null };
-  }
-}
-
-class FakeQueryBuilder {
-  private mode: "select" | "insert" | "update" = "select";
-  private filters: Filter[] = [];
-  private head = false;
-  private columns?: string;
-  private insertResult?: { data: FakeRow | null; error: { code: string; message: string } | null };
-  private updateValues?: Record<string, unknown>;
-
-  constructor(
-    private readonly db: FakeReportsDb,
-    private readonly table: string,
-  ) {}
-
-  insert(row: Record<string, unknown>) {
-    this.mode = "insert";
-    this.insertResult = this.db.insertRow(this.table, row);
-    return this;
-  }
-
-  update(values: Record<string, unknown>) {
-    this.mode = "update";
-    this.updateValues = values;
-    return this;
-  }
-
-  select(columns?: string, options?: { count?: string; head?: boolean }) {
-    if (this.mode === "select") {
-      this.columns = columns;
-      this.head = options?.head ?? false;
-    }
-    return this;
-  }
-
-  eq(field: string, value: unknown) {
-    this.filters.push(["eq", field, value]);
-    return this;
-  }
-
-  gte(field: string, value: unknown) {
-    this.filters.push(["gte", field, value]);
-    return this;
-  }
-
-  lte(field: string, value: unknown) {
-    this.filters.push(["lte", field, value]);
-    return this;
-  }
-
-  lt(field: string, value: unknown) {
-    this.filters.push(["lt", field, value]);
-    return this;
-  }
-
-  private matches(): FakeRow[] {
-    return this.db.tables[this.table].filter((row) =>
-      this.filters.every(([op, field, value]) => {
-        const actual = row[field] as string;
-        const expected = value as string;
-        if (op === "eq") return actual === expected;
-        if (op === "gte") return actual >= expected;
-        if (op === "lte") return actual <= expected;
-        return actual < expected;
-      }),
-    );
-  }
-
-  private project(rows: FakeRow[]): FakeRow[] {
-    if (!this.columns || this.columns === "*") return rows;
-    const picked = this.columns.split(",").map((column) => column.trim());
-    return rows.map((row) =>
-      Object.fromEntries(picked.map((column) => [column, row[column]])),
-    );
-  }
-
-  private resolve(): { data: unknown; error: unknown; count: number | null } {
-    if (this.mode === "insert") {
-      return { ...this.insertResult!, count: null };
-    }
-    if (this.mode === "update") {
-      for (const row of this.matches()) Object.assign(row, this.updateValues);
-      return { data: null, error: null, count: null };
-    }
-
-    this.db.selectQueries.push({ table: this.table, filters: this.filters, head: this.head });
-    if (this.db.failSelects.has(this.table)) {
-      return { data: null, error: { message: "fallo simulado de la consulta" }, count: null };
-    }
-    const rows = this.matches();
-    return { data: this.head ? null : this.project(rows), error: null, count: rows.length };
-  }
-
-  async single() {
-    if (this.mode === "insert") return this.insertResult!;
-    const result = this.resolve();
-    const rows = (result.data as FakeRow[] | null) ?? [];
-    return { data: rows[0] ?? null, error: result.error };
-  }
-
-  then(onfulfilled?: ((value: { data: unknown; error: unknown; count: number | null }) => unknown) | null) {
-    return Promise.resolve(this.resolve()).then(onfulfilled ?? undefined);
   }
 }
 
@@ -242,7 +167,7 @@ describe("generateWeeklyReport", () => {
     const summaryGenerator = fakeSummaryGenerator();
 
     const result = await generateWeeklyReport("scheduled", {
-      supabase: db.client(),
+      post: db.client(),
       emailClient: client,
       summaryGenerator,
       karemEmail: "karem@example.com",
@@ -292,7 +217,7 @@ describe("generateWeeklyReport", () => {
     const summaryGenerator = fakeSummaryGenerator();
 
     await generateWeeklyReport("scheduled", {
-      supabase: db.client(),
+      post: db.client(),
       emailClient: client,
       summaryGenerator,
       karemEmail: "karem@example.com",
@@ -316,7 +241,7 @@ describe("generateWeeklyReport", () => {
     const { client } = createFakeEmailClient();
 
     await generateWeeklyReport("scheduled", {
-      supabase: db.client(),
+      post: db.client(),
       emailClient: client,
       summaryGenerator: fakeSummaryGenerator(),
       karemEmail: "karem@example.com",
@@ -344,7 +269,7 @@ describe("generateWeeklyReport", () => {
     const { client, send } = createFakeEmailClient();
 
     const result = await generateWeeklyReport("scheduled", {
-      supabase: db.client(),
+      post: db.client(),
       emailClient: client,
       summaryGenerator: fakeSummaryGenerator(),
       karemEmail: "karem@example.com",
@@ -367,7 +292,7 @@ describe("generateWeeklyReport", () => {
     ]);
 
     const result = await generateWeeklyReport("scheduled", {
-      supabase: db.client(),
+      post: db.client(),
       emailClient: client,
       summaryGenerator: fakeSummaryGenerator(),
       karemEmail: "karem@example.com",
@@ -391,7 +316,7 @@ describe("generateWeeklyReport", () => {
     const { client, send } = createFakeEmailClient();
 
     const result = await generateWeeklyReport("scheduled", {
-      supabase: db.client(),
+      post: db.client(),
       emailClient: client,
       summaryGenerator: fakeSummaryGenerator(),
       karemEmail: "karem@example.com",
@@ -399,12 +324,12 @@ describe("generateWeeklyReport", () => {
     });
 
     expect(result.outcome).toBe("data_error");
-    expect(result.error).toContain("leads del periodo");
+    expect(result.error).toContain("datos del reporte");
     expect(send).not.toHaveBeenCalled();
 
     const row = reportRow(db);
     expect(row.status).toBe("data_error");
-    expect(row.error_message).toContain("leads del periodo");
+    expect(row.error_message).toContain("datos del reporte");
   });
 
   it("una segunda corrida programada del mismo periodo se omite sin enviar correo (reserva por índice único)", async () => {
@@ -412,14 +337,14 @@ describe("generateWeeklyReport", () => {
     const { client, send } = createFakeEmailClient();
 
     const first = await generateWeeklyReport("scheduled", {
-      supabase: db.client(),
+      post: db.client(),
       emailClient: client,
       summaryGenerator: fakeSummaryGenerator(),
       karemEmail: "karem@example.com",
       now: NOW,
     });
     const second = await generateWeeklyReport("scheduled", {
-      supabase: db.client(),
+      post: db.client(),
       emailClient: client,
       summaryGenerator: fakeSummaryGenerator(),
       karemEmail: "karem@example.com",
@@ -438,14 +363,14 @@ describe("generateWeeklyReport", () => {
     const { client, send } = createFakeEmailClient();
 
     const first = await generateWeeklyReport("manual", {
-      supabase: db.client(),
+      post: db.client(),
       emailClient: client,
       summaryGenerator: fakeSummaryGenerator(),
       karemEmail: "karem@example.com",
       now: NOW,
     });
     const second = await generateWeeklyReport("manual", {
-      supabase: db.client(),
+      post: db.client(),
       emailClient: client,
       summaryGenerator: fakeSummaryGenerator(),
       karemEmail: "karem@example.com",
@@ -469,7 +394,7 @@ describe("generateWeeklyReport", () => {
     delete process.env.KAREM_NOTIFICATION_EMAIL;
 
     const result = await generateWeeklyReport("scheduled", {
-      supabase: db.client(),
+      post: db.client(),
       emailClient: client,
       summaryGenerator: fakeSummaryGenerator(),
       now: NOW,
@@ -497,7 +422,7 @@ describe("generateWeeklyReport", () => {
     });
 
     const result = await generateWeeklyReport("scheduled", {
-      supabase: db.client(),
+      post: db.client(),
       emailClient: client,
       summaryGenerator: throwingGenerator,
       karemEmail: "karem@example.com",

@@ -20,20 +20,12 @@ export interface EmailClient {
   send(input: SendEmailInput): Promise<SendEmailResult>;
 }
 
-/**
- * Convierte cualquier error en un mensaje apto para logs y para
- * lead_automation_events. Además de normalizar el tipo, redacta la
- * contraseña de aplicación por si el proveedor la incluyera en el texto
- * del error — un secreto jamás debe llegar a un log ni a la base de datos.
- */
-function toSafeErrorMessage(error: unknown, secret?: string): string {
-  let message: string;
-  if (error instanceof Error) message = error.message;
-  else if (typeof error === "string") message = error;
-  else message = "Error desconocido al enviar el correo.";
-
-  if (secret) message = message.split(secret).join("[redactado]");
-  return message;
+/** El proveedor podría ecoar el cuerpo (incluido un enlace privado): no
+ * persistimos ni imprimimos su mensaje, solo una categoría técnica segura. */
+function toSafeErrorMessage(error: unknown): string {
+  const code = typeof error === "object" && error !== null && "code" in error
+    ? String(error.code) : "SMTP_ERROR";
+  return /^(E[A-Z0-9_]{2,30}|SMTP_ERROR)$/.test(code) ? `Correo no entregado (${code}).` : "Correo no entregado.";
 }
 
 interface SmtpConfig {
@@ -48,7 +40,6 @@ interface SmtpConfig {
 class SmtpEmailClient implements EmailClient {
   private readonly transporter: Transporter;
   private readonly from: string;
-  private readonly pass: string;
 
   constructor(config: SmtpConfig) {
     this.transporter = nodemailer.createTransport({
@@ -58,7 +49,6 @@ class SmtpEmailClient implements EmailClient {
       auth: { user: config.user, pass: config.pass },
     });
     this.from = config.from;
-    this.pass = config.pass;
   }
 
   async send(input: SendEmailInput): Promise<SendEmailResult> {
@@ -73,7 +63,7 @@ class SmtpEmailClient implements EmailClient {
 
       return { ok: true, providerId: info.messageId };
     } catch (error) {
-      return { ok: false, error: toSafeErrorMessage(error, this.pass) };
+      return { ok: false, error: toSafeErrorMessage(error) };
     }
   }
 }

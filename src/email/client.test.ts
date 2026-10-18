@@ -116,7 +116,7 @@ describe("defaultEmailClient", () => {
     const result = await client.send(SAMPLE_INPUT);
 
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("535");
+    expect(result.error).toContain("Correo no entregado");
     expect(result.error).not.toContain(SMTP_ENV.SMTP_APP_PASSWORD);
   });
 

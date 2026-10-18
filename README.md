@@ -9,11 +9,11 @@ Challenge**. El repositorio evoluciona reto a reto (ver
 
 | Ruta | Qué es | Reto |
 |---|---|---|
-| `/` | Landing de producto: propuesta de valor, galería, sabores, condiciones y formulario de solicitud de cotización (persistido en Supabase). | Reto 2 |
-| `/crea-tu-torta` | Juego "Crea tu propia torta": decora una torta paso a paso y deja tus datos para recibir una cotización personalizada inspirada en tu diseño (persistido en Supabase). | Reto 3 |
+| `/` | Landing de producto y solicitud de cotización (Django/PostgreSQL). | Reto 2 |
+| `/crea-tu-torta` | Juego de diseño y solicitud personalizada (Django/PostgreSQL). | Reto 3 |
 | `/asistente` | Chat del asistente virtual que responde con la base de conocimiento real del negocio y admite lo que no sabe. | Reto 1 |
 | `/prototipo` | Prototipo navegable del "Centro de pedidos": una propuesta (con datos de demostración, sin backend) para que Karem centralice solicitudes, cotizaciones y anticipos. | Reto 5 |
-| `/reporte-semanal` | "Pulso Ponquesito": el reporte semanal que se arma y se envía solo (Vercel Cron → Supabase → métricas → resumen con Gemini o fallback → correo → registro). Muestra solo datos agregados y anonimizados. | Reto 6 |
+| `/reporte-semanal` | "Pulso Ponquesito": Vercel Cron → Django/PostgreSQL → métricas → resumen → correo. Muestra solo datos agregados. | Reto 6 |
 
 Los leads de `/` y `/crea-tu-torta` se procesan automáticamente (Reto 4):
 registro y clasificación, correo de confirmación al cliente, correo interno
@@ -59,24 +59,17 @@ Landing fiel al sistema de diseño e identidad visual entregados por el
 negocio (paleta crema/terracota/cacao/dorado, tipografía Playfair Display +
 Inter + Sacramento, fotografía real de tortas). El formulario "Cuéntanos
 cómo imaginas tu celebración" valida en cliente y servidor, sube la imagen
-de referencia opcional a Supabase Storage y guarda la solicitud en la tabla
+de referencia opcional en almacenamiento privado del backend y guarda la solicitud en la tabla
 `cake_requests`. Detalle de requisitos, preguntas pendientes y decisiones
 de alcance en [`docs/challenge-2.md`](docs/challenge-2.md).
 
-### Configurar Supabase
+### Configurar persistencia
 
-1. Crea un proyecto en [supabase.com](https://supabase.com).
-2. Copia el contenido de [`supabase/schema.sql`](supabase/schema.sql) en el
-   **SQL Editor** de tu proyecto y ejecútalo (es idempotente: puedes
-   volver a correrlo sin duplicar nada). Crea las tablas `cake_requests`,
-   `cake_designs`, `leads` y `lead_automation_events` (todas con RLS
-   habilitado, sin políticas públicas) y el bucket privado
-   `cake-references`.
-3. En **Project Settings → API Keys**, copia la URL del proyecto y la
-   clave secreta a tu `.env.local` (ver `.env.example`). En proyectos
-   nuevos aparece como **"Secret key"** (`sb_secret_...`); en proyectos
-   más antiguos, como **"service_role"**. Esa clave solo se usa en la
-   Server Action de servidor; nunca se expone al navegador.
+El backend Django usa PostgreSQL y sirve una API privada a las Server Actions
+de Next.js. No se crea otro Supabase. Ver
+[`docs/supabase-to-django.md`](docs/supabase-to-django.md) para variables,
+migraciones, pruebas y staging; no aplicar directamente al VPS sin inventario
+y copia de seguridad de su PostgreSQL existente.
 
 ### Probar el formulario en local
 
@@ -85,7 +78,7 @@ npm run dev
 # abre http://localhost:3000, baja a "Cuéntanos cómo imaginas tu celebración"
 ```
 
-Sin las variables de Supabase configuradas, el formulario valida
+Sin la API de Django configurada, el formulario valida
 correctamente pero el envío final falla con un mensaje amable (comportamiento
 esperado: no hay dónde guardar los datos).
 
@@ -105,7 +98,7 @@ tortas sin azúcar?"* (admite que no sabe), *"Quiero encargar una torta"*
 ## Stack
 
 Next.js 16 (App Router) · TypeScript · Tailwind CSS 4 · React Hook Form +
-Zod · Supabase (Postgres + Storage) · Google Gemini (`@google/genai`,
+Zod · Django/PostgreSQL y archivos privados · Google Gemini (`@google/genai`,
 salida estructurada con JSON Schema) · Nodemailer (correo por SMTP de Gmail) ·
 lucide-react · Vitest.
 
@@ -115,9 +108,9 @@ lucide-react · Vitest.
 Landing (/)                          Asistente (/asistente)
   └─ RequestForm (RHF + Zod)           └─ Chat → POST /api/assistant
        └─ Server Action                     → servicio (src/assistant/service.ts)
-            └─ Supabase (service role)           → proveedor Gemini (src/providers/gemini.ts)
+            └─ API interna Django (Bearer)       → proveedor Gemini (src/providers/gemini.ts)
                  ├─ tabla cake_requests                 ├─ prompt del sistema
-                 └─ bucket cake-references              └─ base de conocimiento
+                 └─ imágenes privadas                   └─ base de conocimiento
             └─ after(() => processLead())  ← src/leads/service.ts (Reto 4)
                  ├─ tabla leads
                  ├─ tabla lead_automation_events
@@ -148,9 +141,8 @@ cada una):
 
 - `GEMINI_API_KEY` — opcional; sin ella, `/asistente` usa un proveedor
   determinista de demostración (sin IA).
-- `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — necesarias para
-  que el formulario de la landing guarde datos de verdad (ver sección de
-  Supabase arriba).
+- `PONQUESITO_API_URL`, `PONQUESITO_INTERNAL_API_KEY` — URL HTTPS y credencial
+  exclusiva de la API Django, solo en servidor; no usar prefijo `NEXT_PUBLIC_`.
 - `NEXT_PUBLIC_WHATSAPP_URL` — WhatsApp oficial del negocio,
   `https://wa.me/584248532526` (confirmado en octubre de 2026). Se graba al
   compilar. Sin ella no se muestran el enlace del footer ni "Continuar por
@@ -173,7 +165,7 @@ cada una):
 Pruebas y lint:
 
 ```bash
-npm test      # 139 pruebas (no consumen cuota de Gemini ni tocan Supabase/SMTP)
+npm test      # pruebas sintéticas; SMTP real solo contra receptor local desechable
 npm run lint
 npm run build
 ```
@@ -188,4 +180,5 @@ npm run build
 - [`docs/challenge-5.md`](docs/challenge-5.md) — requisitos y criterios del Reto 5
 - [`docs/challenge-6.md`](docs/challenge-6.md) — requisitos y criterios del Reto 6
 - [`docs/decisions.md`](docs/decisions.md) — registro de decisiones con motivos
+- [`docs/supabase-to-django.md`](docs/supabase-to-django.md) — migración local, staging y reversión
 - [`CLAUDE.md`](CLAUDE.md) — reglas para agentes de IA que trabajen en el repo

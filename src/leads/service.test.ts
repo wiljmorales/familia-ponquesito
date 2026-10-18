@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { ProcessLeadDeps } from "./service";
 
 // service.ts (y sus dependencias) importan "server-only"; en Vitest no hay
 // bundler que distinga cliente/servidor, así que se neutraliza aquí.
@@ -58,57 +58,6 @@ class FakeTable {
   }
 }
 
-class FakeQueryBuilder {
-  private filters: Array<[string, unknown]> = [];
-  private limitCount?: number;
-  private insertResult?: { data: FakeRow | null; error: { code: string; message: string } | null };
-
-  constructor(private readonly table: FakeTable) {}
-
-  insert(row: Record<string, unknown>) {
-    this.insertResult = this.table.insert(row);
-    return this;
-  }
-
-  select() {
-    return this;
-  }
-
-  eq(field: string, value: unknown) {
-    this.filters.push([field, value]);
-    return this;
-  }
-
-  limit(count: number) {
-    this.limitCount = count;
-    return this;
-  }
-
-  private matches(): FakeRow[] {
-    return this.table.rows.filter((row) =>
-      this.filters.every(([field, value]) => row[field] === value),
-    );
-  }
-
-  async single() {
-    if (this.insertResult) return this.insertResult;
-    const matches = this.matches();
-    return { data: matches[0] ?? null, error: null };
-  }
-
-  async maybeSingle() {
-    if (this.insertResult) return this.insertResult;
-    const matches = this.matches();
-    const limited = this.limitCount !== undefined ? matches.slice(0, this.limitCount) : matches;
-    return { data: limited[0] ?? null, error: null };
-  }
-
-  then(onfulfilled?: ((value: { data: unknown; error: unknown }) => unknown) | null) {
-    const result = this.insertResult ?? { data: this.matches(), error: null };
-    return Promise.resolve(onfulfilled ? onfulfilled(result) : result);
-  }
-}
-
 function createFakeSupabase() {
   const leads = new FakeTable([
     { name: "leads_source_unique", columns: ["source_type", "source_id"] },
@@ -123,20 +72,51 @@ function createFakeSupabase() {
     },
   ]);
 
-  const tables: Record<string, FakeTable> = {
-    leads,
-    lead_automation_events: events,
-    reservation_events: reservationEvents,
-  };
+  const sending = new Set<string>();
 
-  const supabase = {
-    from(tableName: string) {
-      return new FakeQueryBuilder(tables[tableName]);
-    },
-  };
+  const post = (async (operation: string, payload: Record<string, unknown> | FormData) => {
+    const p = payload as Record<string, unknown>;
+    if (operation === "lead-by-source") {
+      return { ok: true, lead: leads.rows.find(row => row.source_type === p.source_type && row.source_id === p.source_id) ?? null };
+    }
+    if (operation === "lead-ensure") {
+      const existing = leads.rows.find(row => row.source_type === p.source_type && row.source_id === p.source_id);
+      if (existing) return { ok: true, ...existing };
+      const result = leads.insert(p);
+      if (result.error) return { ok: false, error: "code_taken" };
+      events.insert({ lead_id: result.data?.id, event_type: "lead_registered", status: "success" });
+      return { ok: true, ...result.data };
+    }
+    if (operation === "lead-success") {
+      return { ok: true, exists: events.rows.some(row => row.lead_id === p.lead_id && row.event_type === p.event_type && row.status === "success") };
+    }
+    if (operation === "lead-event") {
+      events.insert(p);
+      return { ok: true };
+    }
+    if (operation === "email-claim") {
+      const identity = `${p.lead_id}:${p.event_type}`;
+      if (events.rows.some(row => row.lead_id === p.lead_id && row.event_type === p.event_type && row.status === "success")) {
+        return { ok: true, state: "sent" };
+      }
+      if (sending.has(identity)) return { ok: true, state: "busy" };
+      sending.add(identity);
+      return { ok: true, state: "claimed", claim: identity };
+    }
+    if (operation === "email-finish") {
+      sending.delete(String(p.claim));
+      events.insert({ lead_id: p.lead_id, event_type: p.event_type, status: p.success ? "success" : "error", error_message: p.success ? null : "smtp_failed", metadata: p.success ? { providerId: p.provider_id } : null });
+      return { ok: true };
+    }
+    if (operation === "reservation-event") {
+      reservationEvents.insert(p);
+      return { ok: true };
+    }
+    throw new Error(`Unexpected test operation: ${operation}`);
+  }) as NonNullable<ProcessLeadDeps["post"]>;
 
   return {
-    supabase: supabase as unknown as SupabaseClient,
+    post,
     leads,
     events,
     reservationEvents,
@@ -201,14 +181,14 @@ describe("processLead", () => {
   });
 
   it("registra el lead y envía ambos correos con éxito", async () => {
-    const { supabase, leads, events } = createFakeSupabase();
+    const { post, leads, events } = createFakeSupabase();
     const { client, send } = createFakeEmailClient([
       { ok: true, providerId: "customer-email-id" },
       { ok: true, providerId: "owner-email-id" },
     ]);
 
     await processLead(BASE_INPUT, {
-      supabase,
+      post,
       emailClient: client,
       karemEmail: "karem@example.com",
     });
@@ -228,14 +208,14 @@ describe("processLead", () => {
   });
 
   it("es idempotente: correr processLead dos veces no reenvía correos exitosos ni duplica el lead", async () => {
-    const { supabase, leads, events } = createFakeSupabase();
+    const { post, leads, events } = createFakeSupabase();
     const { client, send } = createFakeEmailClient([
       { ok: true, providerId: "customer-email-id" },
       { ok: true, providerId: "owner-email-id" },
     ]);
 
-    await processLead(BASE_INPUT, { supabase, emailClient: client, karemEmail: "karem@example.com" });
-    await processLead(BASE_INPUT, { supabase, emailClient: client, karemEmail: "karem@example.com" });
+    await processLead(BASE_INPUT, { post, emailClient: client, karemEmail: "karem@example.com" });
+    await processLead(BASE_INPUT, { post, emailClient: client, karemEmail: "karem@example.com" });
 
     expect(leads.rows).toHaveLength(1);
     expect(send).toHaveBeenCalledTimes(2); // no 4: la segunda corrida no reenvía nada
@@ -244,20 +224,20 @@ describe("processLead", () => {
   });
 
   it("reintenta un envío fallido y, si el reintento falla de nuevo, sí se puede reintentar en la próxima corrida", async () => {
-    const { supabase, events } = createFakeSupabase();
+    const { post, events } = createFakeSupabase();
     const { client, send } = createFakeEmailClient([
       { ok: false, error: "fallo transitorio" }, // intento 1 del correo al cliente
       { ok: false, error: "fallo transitorio" }, // reintento (dentro del mismo sendWithRetry)
       { ok: true, providerId: "owner-email-id" }, // correo a Karem, primer intento
     ]);
 
-    await processLead(BASE_INPUT, { supabase, emailClient: client, karemEmail: "karem@example.com" });
+    await processLead(BASE_INPUT, { post, emailClient: client, karemEmail: "karem@example.com" });
 
     // 2 intentos para el correo al cliente (falló ambos) + 1 para el de Karem.
     expect(send).toHaveBeenCalledTimes(3);
     const customerEvent = events.rows.find((e) => e.event_type === "customer_email");
     expect(customerEvent?.status).toBe("error");
-    expect(customerEvent?.error_message).toBe("fallo transitorio");
+    expect(customerEvent?.error_message).toBe("smtp_failed");
     // El correo a Karem se intenta igual aunque el del cliente haya fallado.
     const ownerEvent = events.rows.find((e) => e.event_type === "owner_email");
     expect(ownerEvent?.status).toBe("success");
@@ -265,19 +245,19 @@ describe("processLead", () => {
     // Una segunda corrida SÍ debe reintentar el correo al cliente (no tuvo éxito antes).
     send.mockReset();
     send.mockResolvedValueOnce({ ok: true, providerId: "customer-email-id-2" });
-    await processLead(BASE_INPUT, { supabase, emailClient: client, karemEmail: "karem@example.com" });
+    await processLead(BASE_INPUT, { post, emailClient: client, karemEmail: "karem@example.com" });
     expect(send).toHaveBeenCalledTimes(1); // solo el correo al cliente; el de Karem ya tuvo éxito
   });
 
   it("si falla el correo interno, no revierte ni reenvía el correo del cliente ya exitoso", async () => {
-    const { supabase, events } = createFakeSupabase();
+    const { post, events } = createFakeSupabase();
     const { client } = createFakeEmailClient([
       { ok: true, providerId: "customer-email-id" },
       { ok: false, error: "dominio no verificado" },
       { ok: false, error: "dominio no verificado" },
     ]);
 
-    await processLead(BASE_INPUT, { supabase, emailClient: client, karemEmail: "karem@example.com" });
+    await processLead(BASE_INPUT, { post, emailClient: client, karemEmail: "karem@example.com" });
 
     const customerEvent = events.rows.find((e) => e.event_type === "customer_email");
     const ownerEvent = events.rows.find((e) => e.event_type === "owner_email");
@@ -286,7 +266,7 @@ describe("processLead", () => {
   });
 
   it("nunca simula éxito del correo a Karem si falta el destinatario configurado", async () => {
-    const { supabase, events } = createFakeSupabase();
+    const { post, events } = createFakeSupabase();
     const { client, send } = createFakeEmailClient([{ ok: true, providerId: "customer-email-id" }]);
 
     // Sin override de karemEmail, el servicio caería a process.env; se borra
@@ -295,7 +275,7 @@ describe("processLead", () => {
     const originalEnvValue = process.env.KAREM_NOTIFICATION_EMAIL;
     delete process.env.KAREM_NOTIFICATION_EMAIL;
 
-    await processLead(BASE_INPUT, { supabase, emailClient: client, karemEmail: undefined });
+    await processLead(BASE_INPUT, { post, emailClient: client, karemEmail: undefined });
 
     if (originalEnvValue !== undefined) process.env.KAREM_NOTIFICATION_EMAIL = originalEnvValue;
 
@@ -307,19 +287,19 @@ describe("processLead", () => {
   });
 
   it("no lanza ni pierde el lead si Supabase falla al registrar el evento de correo", async () => {
-    const { supabase } = createFakeSupabase();
+    const { post } = createFakeSupabase();
     const { client } = createFakeEmailClient([
       { ok: true, providerId: "a" },
       { ok: true, providerId: "b" },
     ]);
 
     await expect(
-      processLead(BASE_INPUT, { supabase, emailClient: client, karemEmail: "karem@example.com" }),
+      processLead(BASE_INPUT, { post, emailClient: client, karemEmail: "karem@example.com" }),
     ).resolves.toBeUndefined();
   });
 
   it("reutiliza el design_code ya generado para leads del Reto 3 como reference_code", async () => {
-    const { supabase, leads } = createFakeSupabase();
+    const { post, leads } = createFakeSupabase();
     const { client } = createFakeEmailClient([
       { ok: true, providerId: "a" },
       { ok: true, providerId: "b" },
@@ -327,14 +307,14 @@ describe("processLead", () => {
 
     await processLead(
       { ...BASE_INPUT, source: "cake_design", referenceCode: "FP-3-A7K2" },
-      { supabase, emailClient: client, karemEmail: "karem@example.com" },
+      { post, emailClient: client, karemEmail: "karem@example.com" },
     );
 
     expect(leads.rows[0].reference_code).toBe("FP-3-A7K2");
   });
 
   it("reutiliza el código FP-8 real y selecciona las plantillas de reserva", async () => {
-    const { supabase, leads } = createFakeSupabase();
+    const { post, leads } = createFakeSupabase();
     const { client } = createFakeEmailClient([
       { ok: true, providerId: "a" },
       { ok: true, providerId: "b" },
@@ -343,19 +323,19 @@ describe("processLead", () => {
     await processReservationLead(
       RESERVATION_INPUT,
       RESERVATION_EMAIL_CONTEXT,
-      { supabase, emailClient: client, karemEmail: "karem@example.com" },
+      { post, emailClient: client, karemEmail: "karem@example.com" },
     );
 
     expect(leads.rows[0].reference_code).toBe("FP-8-ABCD");
   });
 
   it("proyecta eventos terminales idempotentes y no reenvía correos exitosos", async () => {
-    const { supabase, reservationEvents } = createFakeSupabase();
+    const { post, reservationEvents } = createFakeSupabase();
     const { client, send } = createFakeEmailClient([
       { ok: true, providerId: "customer-provider" },
       { ok: true, providerId: "owner-provider" },
     ]);
-    const options = { supabase, emailClient: client, karemEmail: "karem@example.com" };
+    const options = { post, emailClient: client, karemEmail: "karem@example.com" };
 
     await processReservationLead(RESERVATION_INPUT, RESERVATION_EMAIL_CONTEXT, options);
     await processReservationLead(RESERVATION_INPUT, RESERVATION_EMAIL_CONTEXT, options);
@@ -369,13 +349,13 @@ describe("processLead", () => {
   });
 
   it("un fallo del cliente no impide el correo interno y puede reintentarse", async () => {
-    const { supabase, reservationEvents } = createFakeSupabase();
+    const { post, reservationEvents } = createFakeSupabase();
     const { client, send } = createFakeEmailClient([
       { ok: false, error: "fallo cliente" },
       { ok: false, error: "fallo cliente" },
       { ok: true, providerId: "owner-provider" },
     ]);
-    const options = { supabase, emailClient: client, karemEmail: "karem@example.com" };
+    const options = { post, emailClient: client, karemEmail: "karem@example.com" };
 
     await processReservationLead(RESERVATION_INPUT, RESERVATION_EMAIL_CONTEXT, options);
 
@@ -402,13 +382,13 @@ describe("processLead", () => {
   });
 
   it("un fallo del correo interno no revierte ni reenvía el correo del cliente", async () => {
-    const { supabase, reservationEvents } = createFakeSupabase();
+    const { post, reservationEvents } = createFakeSupabase();
     const { client, send } = createFakeEmailClient([
       { ok: true, providerId: "customer-provider" },
       { ok: false, error: "fallo owner" },
       { ok: false, error: "fallo owner" },
     ]);
-    const options = { supabase, emailClient: client, karemEmail: "karem@example.com" };
+    const options = { post, emailClient: client, karemEmail: "karem@example.com" };
 
     await processReservationLead(RESERVATION_INPUT, RESERVATION_EMAIL_CONTEXT, options);
 
@@ -431,14 +411,14 @@ describe("processLead", () => {
   });
 
   it("el enlace privado existe solo en el correo del cliente y nunca en datos persistidos", async () => {
-    const { supabase, leads, events, reservationEvents } = createFakeSupabase();
+    const { post, leads, events, reservationEvents } = createFakeSupabase();
     const { client, send } = createFakeEmailClient([
       { ok: true, providerId: "customer-provider" },
       { ok: true, providerId: "owner-provider" },
     ]);
 
     await processReservationLead(RESERVATION_INPUT, RESERVATION_EMAIL_CONTEXT, {
-      supabase,
+      post,
       emailClient: client,
       karemEmail: "karem@example.com",
     });
@@ -461,7 +441,7 @@ describe("processLead", () => {
   });
 
   it("rechaza defensivamente un normalized_payload que contenga el contexto privado", async () => {
-    const { supabase, leads } = createFakeSupabase();
+    const { post, leads } = createFakeSupabase();
     const { client, send } = createFakeEmailClient([]);
 
     await processReservationLead(
@@ -470,7 +450,7 @@ describe("processLead", () => {
         normalizedPayload: { manageUrl: RESERVATION_EMAIL_CONTEXT.manageUrl },
       },
       RESERVATION_EMAIL_CONTEXT,
-      { supabase, emailClient: client, karemEmail: "karem@example.com" },
+      { post, emailClient: client, karemEmail: "karem@example.com" },
     );
 
     expect(leads.rows).toHaveLength(0);

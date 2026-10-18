@@ -12,6 +12,14 @@ const nextConfig: NextConfig = {
   // Servidor autónomo (.next/standalone) para el VPS. Solo lo activa
   // deploy/web/build-artifact.sh; Vercel compila sin esta opción, igual que antes.
   output: standalone ? "standalone" : undefined,
+  experimental: {
+    serverActions: {
+      // El formulario promete imágenes de hasta 5 MB; el límite por defecto
+      // de una Server Action es 1 MB. Margen para el multipart. Vercel
+      // impone además su propio tope de cuerpo: ver docs/supabase-to-django.md.
+      bodySizeLimit: "6mb",
+    },
+  },
   async rewrites() {
     return [
       // Página de enlaces (reconstrucción byte a byte de la de ChatGPT Sites).

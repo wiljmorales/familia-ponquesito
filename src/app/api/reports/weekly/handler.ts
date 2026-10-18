@@ -25,7 +25,7 @@ function json(body: Record<string, unknown>, status: number): Response {
  * métricas, resumen, secretos ni errores internos; el detalle técnico va
  * solo a los logs del servidor (ya sanitizado por el servicio).
  *
- * `generate` es inyectable para probar el handler sin Supabase ni SMTP.
+ * `generate` es inyectable para probar el handler sin Django ni SMTP.
  */
 export async function handleWeeklyReportRequest(
   request: Request,

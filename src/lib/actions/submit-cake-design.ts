@@ -3,8 +3,7 @@
 import { after } from "next/server";
 import { cakeDesignRequestSchema, cakeDesignSchema } from "@/lib/validations/cake-design";
 import { generateDesignCode } from "@/lib/cake-builder/design-code";
-import { getSupabaseServiceClient } from "@/lib/supabase/server";
-import { CAKE_DESIGNS_TABLE } from "@/lib/supabase/config";
+import { backendPost } from "@/lib/backend/client";
 import { processLead } from "@/leads/service";
 import { describeCakeDesign } from "@/lib/cake-builder/design-summary";
 
@@ -18,7 +17,6 @@ export interface SubmitCakeDesignResult {
 const GENERIC_ERROR_MESSAGE =
   "No pudimos guardar tu diseño en este momento. Inténtalo nuevamente o contáctanos por Instagram.";
 
-const UNIQUE_VIOLATION = "23505";
 const MAX_CODE_ATTEMPTS = 5;
 
 export async function submitCakeDesign(formData: FormData): Promise<SubmitCakeDesignResult> {
@@ -74,18 +72,11 @@ export async function submitCakeDesign(formData: FormData): Promise<SubmitCakeDe
 
   const values = parsedRequest.data;
 
-  // getSupabaseServiceClient() lanza si faltan las variables de entorno, y
-  // el insert puede lanzar ante un fallo de red (no solo devolver
-  // {error}). Todo el bloque va en try/catch, igual que
-  // submit-cake-request.ts (Reto 2), para no dejar escapar un error crudo.
+  // Django valida y persiste; nunca se envía una credencial de BD al navegador.
   try {
-    const supabase = getSupabaseServiceClient();
-
     for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
       const designCode = generateDesignCode();
-      const { data: inserted, error } = await supabase
-        .from(CAKE_DESIGNS_TABLE)
-        .insert({
+      const inserted = await backendPost<{ ok: boolean; id?: string; error?: string }>("cake-design", {
           design_code: designCode,
           design: parsedDesign.data,
           customer_name: values.customerName,
@@ -94,18 +85,17 @@ export async function submitCakeDesign(formData: FormData): Promise<SubmitCakeDe
           event_date: values.eventDate,
           guest_count: values.guestCount,
           zone: values.zone,
-        })
-        .select("id")
-        .single();
+      });
 
-      if (!error) {
+      if (inserted.ok && inserted.id) {
+        const sourceId = inserted.id;
         // Igual que en submit-cake-request.ts: la automatización corre
         // después de responder, para que un fallo de correo nunca demore
         // ni bloquee la confirmación del diseño ya guardado.
         after(() =>
           processLead({
             source: "cake_design",
-            sourceId: inserted.id,
+            sourceId,
             customerName: values.customerName,
             customerWhatsapp: values.whatsapp,
             customerEmail: values.email,
@@ -123,8 +113,8 @@ export async function submitCakeDesign(formData: FormData): Promise<SubmitCakeDe
         return { ok: true, message: "¡Tu diseño ya está en manos de Familia Ponquesito!", designCode };
       }
 
-      if (error.code !== UNIQUE_VIOLATION) {
-        console.error("[cake-design] fallo al guardar el diseño", error);
+      if (inserted.error !== "code_taken") {
+        console.error("[cake-design] fallo al guardar el diseño");
         return { ok: false, message: GENERIC_ERROR_MESSAGE };
       }
       // Colisión de design_code (poco probable): reintenta con un código nuevo.
@@ -132,8 +122,8 @@ export async function submitCakeDesign(formData: FormData): Promise<SubmitCakeDe
 
     console.error("[cake-design] no se pudo generar un código de diseño único");
     return { ok: false, message: GENERIC_ERROR_MESSAGE };
-  } catch (error) {
-    console.error("[cake-design] fallo inesperado al guardar el diseño", error);
+  } catch {
+    console.error("[cake-design] fallo inesperado al guardar el diseño");
     return { ok: false, message: GENERIC_ERROR_MESSAGE };
   }
 }

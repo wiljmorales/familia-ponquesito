@@ -1,11 +1,5 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { getSupabaseServiceClient } from "@/lib/supabase/server";
-import {
-  LEADS_TABLE,
-  LEAD_AUTOMATION_EVENTS_TABLE,
-  RESERVATION_EVENTS_TABLE,
-} from "@/lib/supabase/config";
+import { backendPost } from "@/lib/backend/client";
 import { generateReferenceCode } from "@/lib/reference-code";
 import { defaultEmailClient, type EmailClient, type SendEmailResult } from "@/email/client";
 import {
@@ -25,8 +19,8 @@ import type {
   ReservationLeadDetails,
 } from "./types";
 
-const UNIQUE_VIOLATION = "23505";
 const MAX_REFERENCE_CODE_ATTEMPTS = 5;
+type Post = typeof backendPost;
 
 const REFERENCE_CODE_PREFIX: Record<LeadSourceType, string> = {
   cake_request: "FP-2",
@@ -53,8 +47,8 @@ type ReservationProcessLeadInput = ProcessLeadInput & {
 type EmailOutcome = SendEmailResult | { ok: true; skipped: true };
 
 export interface ProcessLeadDeps {
-  /** Inyectable para pruebas; por defecto el cliente real (service_role). */
-  supabase?: SupabaseClient;
+  /** Inyectable para pruebas; por defecto la API interna de Django. */
+  post?: Post;
   /** Inyectable para pruebas; por defecto SMTP (Nodemailer) o el stub de desarrollo. */
   emailClient?: EmailClient;
   /** Inyectable para pruebas; por defecto process.env.KAREM_NOTIFICATION_EMAIL. */
@@ -75,14 +69,7 @@ export async function processLead(
   deps: ProcessLeadDeps = {},
   reservationEmailContext?: ReservationEmailContext,
 ): Promise<void> {
-  let supabase: SupabaseClient;
-  try {
-    supabase = deps.supabase ?? getSupabaseServiceClient();
-  } catch (error) {
-    console.error("[leads] Supabase no está configurado, no se puede procesar el lead", error);
-    return;
-  }
-
+  const post = deps.post ?? backendPost;
   const emailClient = deps.emailClient ?? defaultEmailClient();
 
   try {
@@ -102,10 +89,10 @@ export async function processLead(
       return;
     }
 
-    const lead = await ensureLead(supabase, input);
+    const lead = await ensureLead(post, input);
     if (!lead) return;
 
-    await projectReservationEvent(supabase, input, {
+    await projectReservationEvent(post, input, {
       eventType: "lead_registered",
       dedupeKey: "lead_registered",
     });
@@ -115,16 +102,16 @@ export async function processLead(
 
     // Independientes a propósito: si uno falla, el otro se intenta igual.
     const customerOutcome = await sendCustomerEmail(
-      supabase,
+      post,
       emailClient,
       lead,
       input,
       reservationEmailContext,
     );
-    await projectEmailOutcome(supabase, input, "customer", customerOutcome);
+    await projectEmailOutcome(post, input, "customer", customerOutcome);
 
     const ownerOutcome = await sendOwnerEmail(
-      supabase,
+      post,
       emailClient,
       lead,
       input,
@@ -132,9 +119,9 @@ export async function processLead(
       deps.karemEmail,
       reservationEmailContext,
     );
-    await projectEmailOutcome(supabase, input, "owner", ownerOutcome);
-  } catch (error) {
-    console.error("[leads] fallo inesperado procesando el lead", error);
+    await projectEmailOutcome(post, input, "owner", ownerOutcome);
+  } catch {
+    console.error("[leads] fallo inesperado procesando el lead");
   }
 }
 
@@ -174,10 +161,10 @@ function containsPrivateContext(
 }
 
 async function ensureLead(
-  supabase: SupabaseClient,
+  post: Post,
   input: ProcessLeadInput,
 ): Promise<LeadRow | null> {
-  const existing = await findLeadBySource(supabase, input.source, input.sourceId);
+  const existing = await findLeadBySource(post, input.source, input.sourceId);
   if (existing) return existing;
 
   const priority = classifyLeadPriority(input.celebrationDate);
@@ -186,9 +173,8 @@ async function ensureLead(
     const referenceCode =
       input.referenceCode ?? generateReferenceCode(REFERENCE_CODE_PREFIX[input.source]);
 
-    const { data, error } = await supabase
-      .from(LEADS_TABLE)
-      .insert({
+    const result = await post<{ ok: boolean; id?: string; reference_code?: string; priority?: LeadPriority; error?: string }>(
+      "lead-ensure", {
         source_type: input.source,
         source_id: input.sourceId,
         reference_code: referenceCode,
@@ -198,28 +184,20 @@ async function ensureLead(
         celebration_date: input.celebrationDate,
         priority,
         normalized_payload: input.normalizedPayload,
-      })
-      .select("id, reference_code, priority")
-      .single();
+      });
 
-    if (!error) {
-      const lead = data as LeadRow;
-      await logEvent(supabase, lead.id, "lead_registered", "success");
-      return lead;
+    if (result.ok && result.id && result.reference_code && result.priority) {
+      return { id: result.id, reference_code: result.reference_code, priority: result.priority };
     }
 
-    if (error.code === UNIQUE_VIOLATION) {
-      if (error.message.includes("leads_source_unique")) {
-        // Otra ejecución concurrente ya registró este mismo lead: la
-        // reutilizamos en vez de tratarlo como error.
-        return await findLeadBySource(supabase, input.source, input.sourceId);
-      }
+    if (result.error === "code_taken") {
+      const concurrent = await findLeadBySource(post, input.source, input.sourceId);
+      if (concurrent) return concurrent;
       // Colisión de reference_code: reintenta con uno nuevo.
       continue;
     }
 
-    console.error("[leads] fallo al registrar el lead", error);
-    await logFailedRegistration(supabase, input, error.message);
+    logFailedRegistration(input);
     return null;
   }
 
@@ -228,23 +206,14 @@ async function ensureLead(
 }
 
 async function findLeadBySource(
-  supabase: SupabaseClient,
+  post: Post,
   source: LeadSourceType,
   sourceId: string,
 ): Promise<LeadRow | null> {
-  const { data, error } = await supabase
-    .from(LEADS_TABLE)
-    .select("id, reference_code, priority")
-    .eq("source_type", source)
-    .eq("source_id", sourceId)
-    .maybeSingle();
-
-  if (error) {
-    console.error("[leads] fallo al buscar el lead existente", error);
-    return null;
-  }
-
-  return data as LeadRow | null;
+  const result = await post<{ ok: boolean; lead: LeadRow | null }>("lead-by-source", {
+    source_type: source, source_id: sourceId,
+  });
+  return result.ok ? result.lead : null;
 }
 
 /**
@@ -253,49 +222,36 @@ async function findLeadBySource(
  * registrar el evento). El lead original en cake_requests/cake_designs no
  * se ve afectado: ya se guardó antes de llegar aquí.
  */
-async function logFailedRegistration(
-  supabase: SupabaseClient,
-  input: ProcessLeadInput,
-  message: string,
-): Promise<void> {
-  console.error(
-    `[leads] no se pudo registrar el lead para ${input.source}:${input.sourceId}: ${message}`,
-  );
+function logFailedRegistration(input: ProcessLeadInput): void {
+  console.error(`[leads] no se pudo registrar el lead para ${input.source}:${input.sourceId}`);
 }
 
-async function hasSuccessfulEvent(
-  supabase: SupabaseClient,
-  leadId: string,
-  eventType: EventType,
-): Promise<boolean> {
-  const { data, error } = await supabase
-    .from(LEAD_AUTOMATION_EVENTS_TABLE)
-    .select("id")
-    .eq("lead_id", leadId)
-    .eq("event_type", eventType)
-    .eq("status", "success")
-    .limit(1)
-    .maybeSingle();
+async function claimEmail(post: Post, leadId: string, eventType: EventType): Promise<string | null> {
+  const result = await post<{ ok: boolean; state?: "claimed" | "sent" | "busy"; claim?: string }>(
+    "email-claim", { lead_id: leadId, event_type: eventType },
+  );
+  if (!result.ok) throw new Error("No se pudo reservar el envío de correo.");
+  return result.state === "claimed" && result.claim ? result.claim : null;
+}
 
-  if (error) {
-    console.error("[leads] fallo al consultar eventos previos de automatización", error);
-    // Ante duda, no bloqueamos el reintento: preferible un correo de más
-    // (poco probable, requeriría dos fallos consecutivos de la misma
-    // consulta) que perder la notificación por un error de lectura.
-    return false;
-  }
-
-  return Boolean(data);
+async function finishEmail(
+  post: Post, leadId: string, eventType: EventType, claim: string, result: SendEmailResult,
+): Promise<void> {
+  const finished = await post<{ ok: boolean }>("email-finish", {
+    lead_id: leadId, event_type: eventType, claim, success: result.ok,
+    provider_id: result.ok ? result.providerId : null,
+  });
+  if (!finished.ok) throw new Error("No se pudo registrar el resultado del correo.");
 }
 
 async function logEvent(
-  supabase: SupabaseClient,
+  post: Post,
   leadId: string,
   eventType: EventType,
   status: EventStatus,
   options: { errorMessage?: string; metadata?: Record<string, unknown> } = {},
 ): Promise<void> {
-  const { error } = await supabase.from(LEAD_AUTOMATION_EVENTS_TABLE).insert({
+  const result = await post<{ ok: boolean }>("lead-event", {
     lead_id: leadId,
     event_type: eventType,
     status,
@@ -303,8 +259,8 @@ async function logEvent(
     metadata: options.metadata ?? null,
   });
 
-  if (error) {
-    console.error("[leads] fallo al registrar el evento de automatización", error);
+  if (!result.ok) {
+    console.error("[leads] fallo al registrar el evento de automatización");
   }
 }
 
@@ -319,13 +275,14 @@ async function sendWithRetry(
 }
 
 async function sendCustomerEmail(
-  supabase: SupabaseClient,
+  post: Post,
   emailClient: EmailClient,
   lead: LeadRow,
   input: ProcessLeadInput,
   reservationEmailContext?: ReservationEmailContext,
 ): Promise<EmailOutcome> {
-  if (await hasSuccessfulEvent(supabase, lead.id, "customer_email")) {
+  const claim = await claimEmail(post, lead.id, "customer_email");
+  if (!claim) {
     return { ok: true, skipped: true };
   }
 
@@ -354,15 +311,12 @@ async function sendCustomerEmail(
     text: email.text,
   });
 
-  await logEvent(supabase, lead.id, "customer_email", result.ok ? "success" : "error", {
-    errorMessage: result.error,
-    metadata: result.ok ? { providerId: result.providerId } : undefined,
-  });
+  await finishEmail(post, lead.id, "customer_email", claim, result);
   return result;
 }
 
 async function sendOwnerEmail(
-  supabase: SupabaseClient,
+  post: Post,
   emailClient: EmailClient,
   lead: LeadRow,
   input: ProcessLeadInput,
@@ -370,19 +324,17 @@ async function sendOwnerEmail(
   karemEmailOverride?: string,
   reservationEmailContext?: ReservationEmailContext,
 ): Promise<EmailOutcome> {
-  if (await hasSuccessfulEvent(supabase, lead.id, "owner_email")) {
-    return { ok: true, skipped: true };
-  }
-
   const karemEmail = karemEmailOverride ?? process.env.KAREM_NOTIFICATION_EMAIL;
   if (!karemEmail) {
     const error =
       "Falta configurar KAREM_NOTIFICATION_EMAIL: no hay destinatario para la notificación interna.";
-    await logEvent(supabase, lead.id, "owner_email", "error", {
+    await logEvent(post, lead.id, "owner_email", "error", {
       errorMessage: error,
     });
     return { ok: false, error };
   }
+  const claim = await claimEmail(post, lead.id, "owner_email");
+  if (!claim) return { ok: true, skipped: true };
 
   let referenceImageSignedUrl: string | null = null;
   if (
@@ -423,23 +375,21 @@ async function sendOwnerEmail(
     text: email.text,
   });
 
-  await logEvent(supabase, lead.id, "owner_email", result.ok ? "success" : "error", {
-    errorMessage: result.error,
-    metadata: result.ok ? { providerId: result.providerId } : undefined,
-  });
+  await finishEmail(post, lead.id, "owner_email", claim, result);
   return result;
 }
 
 async function projectEmailOutcome(
-  supabase: SupabaseClient,
+  post: Post,
   input: ProcessLeadInput,
   recipient: "customer" | "owner",
   outcome: EmailOutcome,
 ): Promise<void> {
   if (input.source !== "cake_reservation") return;
+  if ("skipped" in outcome && outcome.skipped) return;
 
   const success = outcome.ok;
-  await projectReservationEvent(supabase, input, {
+  await projectReservationEvent(post, input, {
     eventType: success ? "email_sent" : "email_failed",
     dedupeKey: success ? `${recipient}_email_sent` : null,
     metadata: {
@@ -452,7 +402,7 @@ async function projectEmailOutcome(
 }
 
 async function projectReservationEvent(
-  supabase: SupabaseClient,
+  post: Post,
   input: ProcessLeadInput,
   event: {
     eventType: "lead_registered" | "email_sent" | "email_failed";
@@ -462,14 +412,14 @@ async function projectReservationEvent(
 ): Promise<void> {
   if (input.source !== "cake_reservation") return;
 
-  const { error } = await supabase.from(RESERVATION_EVENTS_TABLE).insert({
+  const result = await post<{ ok: boolean }>("reservation-event", {
     reservation_id: input.sourceId,
     event_type: event.eventType,
     dedupe_key: event.dedupeKey,
     metadata: event.metadata ?? null,
   });
 
-  if (error && error.code !== UNIQUE_VIOLATION) {
+  if (!result.ok) {
     // El detalle del proveedor de base de datos no se persiste. Esta
     // proyección es secundaria y jamás hace fallar leads ni correos.
     console.error("[leads] no se pudo proyectar un evento seguro de reserva");

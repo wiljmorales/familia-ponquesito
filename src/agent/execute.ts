@@ -1,6 +1,5 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { LEADS_TABLE } from "@/lib/supabase/config";
+import { backendPost } from "@/lib/backend/client";
 import { processLead } from "@/leads/service";
 import type { LeadPriority } from "@/leads/classify";
 import type { EmailClient } from "@/email/client";
@@ -26,8 +25,8 @@ import type {
  */
 
 export interface ExecuteAgentRouteDeps {
-  /** null cuando Supabase no está configurado (la demo sigue, sin registrar). */
-  supabase: SupabaseClient | null;
+  /** null cuando Django no está configurado (la demo sigue, sin registrar). */
+  post: typeof backendPost | null;
   /** id de la fila reservada en agent_decisions; null si no se pudo registrar. */
   decisionId: string | null;
   /** Inyectable para pruebas; por defecto el flujo real de processLead. */
@@ -68,8 +67,8 @@ export async function executeAgentRoute(
       case "human_escalation":
         return executeHumanEscalation(decision);
     }
-  } catch (error) {
-    console.error(`[agent] fallo inesperado ejecutando la ruta ${route}`, error);
+  } catch {
+    console.error(`[agent] fallo inesperado ejecutando la ruta ${route}`);
     return {
       status: "escalated_to_human",
       executedAction:
@@ -100,7 +99,7 @@ async function executeLeadAutomation(
     };
   }
 
-  if (!deps.supabase || !deps.decisionId) {
+  if (!deps.post || !deps.decisionId) {
     return {
       status: "not_executed",
       executedAction:
@@ -140,19 +139,15 @@ async function executeLeadAutomation(
         challenge: "reto-7",
       },
     },
-    { supabase: deps.supabase, emailClient: deps.emailClient, karemEmail: deps.karemEmail },
+    { post: deps.post, emailClient: deps.emailClient, karemEmail: deps.karemEmail },
   );
 
-  const { data, error } = await deps.supabase
-    .from(LEADS_TABLE)
-    .select("reference_code, priority")
-    .eq("source_type", "agent_message")
-    .eq("source_id", deps.decisionId)
-    .maybeSingle();
+  const result = await deps.post<{ ok: boolean; lead: { reference_code: string; priority: LeadPriority } | null }>(
+    "lead-by-source", { source_type: "agent_message", source_id: deps.decisionId },
+  );
+  const lead = result.lead;
 
-  const lead = data as { reference_code: string; priority: LeadPriority } | null;
-
-  if (error || !lead) {
+  if (!result.ok || !lead) {
     return {
       status: "not_executed",
       executedAction:

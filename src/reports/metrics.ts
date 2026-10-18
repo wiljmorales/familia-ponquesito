@@ -31,7 +31,7 @@ export interface ComputeMetricsInput {
 /**
  * Transforma filas crudas en el contrato de métricas del reporte. Función
  * pura: toda la interpretación (deduplicación de correos, tasa, alertas)
- * vive aquí para poder probarse sin Supabase.
+ * vive aquí para poder probarse sin una base de datos.
  */
 export function computeWeeklyMetrics(input: ComputeMetricsInput): WeeklyReportMetrics {
   const bySource = {

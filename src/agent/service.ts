@@ -1,7 +1,5 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { getSupabaseServiceClient } from "@/lib/supabase/server";
-import { AGENT_DECISIONS_TABLE } from "@/lib/supabase/config";
+import { backendPost } from "@/lib/backend/client";
 import type { EmailClient } from "@/email/client";
 import type { AssistantReply } from "@/assistant/types";
 import type { processLead } from "@/leads/service";
@@ -45,7 +43,7 @@ export interface ProcessAgentMessageDeps {
   /** Inyectable para pruebas; por defecto Gemini con fallback determinista. */
   analyzer?: AgentAnalyzer;
   /** Inyectable para pruebas; null explícito = sin persistencia. */
-  supabase?: SupabaseClient | null;
+  post?: typeof backendPost | null;
   /** Inyectable para pruebas; lo consume processLead (Reto 4). */
   emailClient?: EmailClient;
   /** Inyectable para pruebas; por defecto el asistente del Reto 1. */
@@ -129,13 +127,10 @@ export function parseAgentRequest(raw: unknown): AgentMessageInput {
   };
 }
 
-function safeGetSupabase(): SupabaseClient | null {
-  try {
-    return getSupabaseServiceClient();
-  } catch (error) {
-    console.error("[agent] Supabase no está configurado; la demo sigue sin registrar", error);
-    return null;
-  }
+function safeGetBackend(): typeof backendPost | null {
+  if (process.env.PONQUESITO_API_URL && process.env.PONQUESITO_INTERNAL_API_KEY) return backendPost;
+  console.error("[agent] Django no está configurado; la demo sigue sin registrar");
+  return null;
 }
 
 export async function processAgentMessage(
@@ -153,8 +148,8 @@ export async function processAgentMessage(
   let analysis: AgentAnalysis;
   try {
     analysis = await (deps.analyzer ?? defaultAgentAnalyzer(todayISO))(input.message);
-  } catch (error) {
-    console.error("[agent] el analizador lanzó; se usa el fallback", error);
+  } catch {
+    console.error("[agent] el analizador lanzó; se usa el fallback");
     analysis = {
       decision: buildFallbackDecision("el análisis falló de forma inesperada"),
       source: "fallback",
@@ -171,16 +166,15 @@ export async function processAgentMessage(
 
   const route = routeAgentDecision(decision);
 
-  const supabase = deps.supabase !== undefined ? deps.supabase : safeGetSupabase();
+  const post = deps.post !== undefined ? deps.post : safeGetBackend();
 
   // Reserva la fila ANTES de ejecutar (patrón del Reto 6): si la ruta es la
   // máquina de leads, esta fila es la "fila original" del lead
   // (source_type = 'agent_message', source_id = decisionId).
   let decisionId: string | null = null;
-  if (supabase) {
-    const { data, error } = await supabase
-      .from(AGENT_DECISIONS_TABLE)
-      .insert({
+  if (post) {
+    try {
+      const result = await post<{ ok: boolean; id?: string }>("agent-create", {
         source: input.sourceLabel,
         source_record_id: input.demoCaseId,
         input_content: input.message,
@@ -196,19 +190,16 @@ export async function processAgentMessage(
         guardrail_corrections: corrections,
         decision_source: analysis.source,
         status: "processing",
-      })
-      .select("id")
-      .single();
-
-    if (error) {
-      console.error("[agent] fallo al registrar la decisión", error);
-    } else {
-      decisionId = (data as { id: string }).id;
+      });
+      if (!result.ok || !result.id) console.error("[agent] fallo al registrar la decisión");
+      else decisionId = result.id;
+    } catch {
+      console.error("[agent] API no disponible al registrar la decisión");
     }
   }
 
   const execution = await executeAgentRoute(route, decision, input, {
-    supabase,
+    post,
     decisionId,
     emailClient: deps.emailClient,
     processLeadFn: deps.processLeadFn,
@@ -218,14 +209,13 @@ export async function processAgentMessage(
     todayISO,
   });
 
-  if (supabase && decisionId) {
-    const { error } = await supabase
-      .from(AGENT_DECISIONS_TABLE)
-      .update({ executed_action: execution.executedAction, status: execution.status })
-      .eq("id", decisionId);
-    if (error) {
-      console.error("[agent] fallo al completar la fila de la decisión", error);
-    }
+  if (post && decisionId) {
+    try {
+      const result = await post<{ ok: boolean }>("agent-update", {
+        id: decisionId, executed_action: execution.executedAction, status: execution.status,
+      });
+      if (!result.ok) console.error("[agent] fallo al completar la fila de la decisión");
+    } catch { console.error("[agent] API no disponible al completar la decisión"); }
   }
 
   const timeline: string[] = [

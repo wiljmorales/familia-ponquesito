@@ -105,7 +105,7 @@ export function StatusBadge({ status }: { status: WeeklyReportStatus }) {
 const FLOW_STEPS = [
   {
     icon: Database,
-    title: "Supabase",
+    title: "PostgreSQL",
     detail: "Se consulta la actividad registrada: solicitudes y automatizaciones.",
   },
   {
@@ -183,9 +183,9 @@ export function AutomationStatus() {
           <Mail className="size-4" aria-hidden />
         </span>
         <div>
-          <p className="text-sm font-semibold text-cocoa">De Supabase al correo del negocio</p>
+          <p className="text-sm font-semibold text-cocoa">De PostgreSQL al correo del negocio</p>
           <p className="text-xs leading-relaxed text-text-secondary">
-            Se reporta la actividad registrada en Supabase y el resultado
+            Se reporta la actividad registrada en PostgreSQL y el resultado
             llega al correo configurado del negocio.
           </p>
         </div>

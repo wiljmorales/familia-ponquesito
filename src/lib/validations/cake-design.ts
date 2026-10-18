@@ -17,7 +17,7 @@ const TOPPER_IDS = TOPPER_OPTIONS.map((o) => o.id) as [string, ...string[]];
 /**
  * Valida la estructura del CakeDesign que llega del cliente contra el
  * catálogo real de opciones (no solo tipos): un id que no exista en
- * options.ts se rechaza, así el jsonb guardado en Supabase siempre es
+ * options.ts se rechaza, así el JSON guardado en PostgreSQL siempre es
  * reconstruible.
  */
 export const cakeDesignSchema = z

@@ -51,7 +51,7 @@ export async function POST(request: Request) {
       return Response.json({ error: error.message }, { status: 400 });
     }
     // processAgentMessage no debería lanzar por otra causa; cinturón final.
-    console.error("[agent] fallo inesperado en el endpoint", error);
+    console.error("[agent] fallo inesperado en el endpoint");
     return Response.json(
       { error: "No se pudo procesar el mensaje en este momento. Intente de nuevo, por favor." },
       { status: 500 },

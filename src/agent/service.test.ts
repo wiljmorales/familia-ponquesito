@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { ProcessAgentMessageDeps } from "./service";
 
 // El servicio (y processLead) importan "server-only"; en Vitest no hay
 // bundler que distinga cliente/servidor, así que se neutraliza aquí.
@@ -55,70 +55,6 @@ class FakeTable {
   }
 }
 
-class FakeQueryBuilder {
-  private filters: Array<[string, unknown]> = [];
-  private limitCount?: number;
-  private insertResult?: { data: FakeRow | null; error: unknown };
-  private pendingUpdate?: Record<string, unknown>;
-
-  constructor(private readonly table: FakeTable) {}
-
-  insert(row: Record<string, unknown>) {
-    this.insertResult = this.table.insert(row);
-    return this;
-  }
-
-  update(values: Record<string, unknown>) {
-    this.pendingUpdate = values;
-    return this;
-  }
-
-  select() {
-    return this;
-  }
-
-  eq(field: string, value: unknown) {
-    this.filters.push([field, value]);
-    return this;
-  }
-
-  limit(count: number) {
-    this.limitCount = count;
-    return this;
-  }
-
-  private matches(): FakeRow[] {
-    return this.table.rows.filter((row) =>
-      this.filters.every(([field, value]) => row[field] === value),
-    );
-  }
-
-  private settle(): { data: unknown; error: unknown } {
-    if (this.pendingUpdate) {
-      for (const row of this.matches()) Object.assign(row, this.pendingUpdate);
-      return { data: null, error: null };
-    }
-    return this.insertResult ?? { data: this.matches(), error: null };
-  }
-
-  async single() {
-    if (this.insertResult) return this.insertResult;
-    return { data: this.matches()[0] ?? null, error: null };
-  }
-
-  async maybeSingle() {
-    if (this.insertResult) return this.insertResult;
-    const matches = this.matches();
-    const limited = this.limitCount !== undefined ? matches.slice(0, this.limitCount) : matches;
-    return { data: limited[0] ?? null, error: null };
-  }
-
-  then(onfulfilled?: ((value: { data: unknown; error: unknown }) => unknown) | null) {
-    const result = this.settle();
-    return Promise.resolve(onfulfilled ? onfulfilled(result) : result);
-  }
-}
-
 function createFakeSupabase() {
   const tables: Record<string, FakeTable> = {
     agent_decisions: new FakeTable(),
@@ -128,12 +64,46 @@ function createFakeSupabase() {
     ]),
     lead_automation_events: new FakeTable(),
   };
-  const supabase = {
-    from(tableName: string) {
-      return new FakeQueryBuilder(tables[tableName]);
-    },
-  } as unknown as SupabaseClient;
-  return { supabase, tables };
+  const post = (async (operation: string, payload: Record<string, unknown> | FormData) => {
+    const p = payload as Record<string, unknown>;
+    if (operation === "agent-create") {
+      const inserted = tables.agent_decisions.insert(p);
+      return { ok: true, id: inserted.data?.id };
+    }
+    if (operation === "agent-update") {
+      const row = tables.agent_decisions.rows.find(item => item.id === p.id);
+      if (row) Object.assign(row, { status: p.status, executed_action: p.executed_action });
+      return { ok: Boolean(row) };
+    }
+    if (operation === "lead-by-source") {
+      return { ok: true, lead: tables.leads.rows.find(row => row.source_type === p.source_type && row.source_id === p.source_id) ?? null };
+    }
+    if (operation === "lead-ensure") {
+      const existing = tables.leads.rows.find(row => row.source_type === p.source_type && row.source_id === p.source_id);
+      if (existing) return { ok: true, ...existing };
+      const inserted = tables.leads.insert(p);
+      if (inserted.error) return { ok: false, error: "code_taken" };
+      tables.lead_automation_events.insert({ lead_id: inserted.data?.id, event_type: "lead_registered", status: "success" });
+      return { ok: true, ...inserted.data };
+    }
+    if (operation === "lead-success") {
+      return { ok: true, exists: tables.lead_automation_events.rows.some(row => row.lead_id === p.lead_id && row.event_type === p.event_type && row.status === "success") };
+    }
+    if (operation === "lead-event") {
+      tables.lead_automation_events.insert(p);
+      return { ok: true };
+    }
+    if (operation === "email-claim") {
+      const alreadySent = tables.lead_automation_events.rows.some(row => row.lead_id === p.lead_id && row.event_type === p.event_type && row.status === "success");
+      return alreadySent ? { ok: true, state: "sent" } : { ok: true, state: "claimed", claim: `${p.lead_id}:${p.event_type}` };
+    }
+    if (operation === "email-finish") {
+      tables.lead_automation_events.insert({ lead_id: p.lead_id, event_type: p.event_type, status: p.success ? "success" : "error" });
+      return { ok: true };
+    }
+    throw new Error(`Unexpected test operation: ${operation}`);
+  }) as NonNullable<ProcessAgentMessageDeps["post"]>;
+  return { post, tables };
 }
 
 function createFakeEmailClient(): { client: EmailClient; sent: Array<{ to: string; subject: string }> } {
@@ -201,7 +171,7 @@ describe("parseAgentRequest", () => {
 describe("processAgentMessage — integración mensaje → decisión → guardrails → ruta → resultado", () => {
   it("caso 1: registra el lead de verdad con processLead() del Reto 4", async () => {
     vi.stubEnv("AGENT_DEMO_CUSTOMER_EMAIL", "demo@correo-de-prueba.dev");
-    const { supabase, tables } = createFakeSupabase();
+    const { post, tables } = createFakeSupabase();
     const email = createFakeEmailClient();
 
     const result = await processAgentMessage(
@@ -213,7 +183,7 @@ describe("processAgentMessage — integración mensaje → decisión → guardra
             route: "lead_automation",
             detectedCelebrationDate: addDaysISO(TODAY, 8),
           }),
-        supabase,
+        post,
         emailClient: email.client,
         karemEmail: "karem@correo-de-prueba.dev",
       },
@@ -244,7 +214,7 @@ describe("processAgentMessage — integración mensaje → decisión → guardra
   });
 
   it("caso 2: responde con la base de conocimiento y no crea ningún lead", async () => {
-    const { supabase, tables } = createFakeSupabase();
+    const { post, tables } = createFakeSupabase();
 
     const result = await processAgentMessage(
       { demoCaseId: "caso-2" },
@@ -255,7 +225,7 @@ describe("processAgentMessage — integración mensaje → decisión → guardra
             route: "knowledge_answer",
             urgency: "low",
           }),
-        supabase,
+        post,
         askKnowledge: async () => ({
           status: "answered",
           reply: "Tenemos vainilla, chocolate, red velvet y tres leches.",
@@ -271,7 +241,7 @@ describe("processAgentMessage — integración mensaje → decisión → guardra
   });
 
   it("caso 3: pide solo los datos faltantes y queda esperando información", async () => {
-    const { supabase, tables } = createFakeSupabase();
+    const { post, tables } = createFakeSupabase();
 
     const result = await processAgentMessage(
       { demoCaseId: "caso-3" },
@@ -282,7 +252,7 @@ describe("processAgentMessage — integración mensaje → decisión → guardra
             route: "request_information",
             missingFields: ["celebration_date", "guest_count"],
           }),
-        supabase,
+        post,
       },
     );
 
@@ -294,7 +264,7 @@ describe("processAgentMessage — integración mensaje → decisión → guardra
   });
 
   it("caso 4: identifica PED-001, aplica la política y escala sin confirmar el cambio", async () => {
-    const { supabase } = createFakeSupabase();
+    const { post } = createFakeSupabase();
 
     const result = await processAgentMessage(
       { demoCaseId: "caso-4" },
@@ -306,7 +276,7 @@ describe("processAgentMessage — integración mensaje → decisión → guardra
             detectedOrderCode: "PED-001",
             urgency: "high",
           }),
-        supabase,
+        post,
       },
     );
 
@@ -322,7 +292,7 @@ describe("processAgentMessage — integración mensaje → decisión → guardra
   });
 
   it("caso 5: detiene la respuesta automática y escala a revisión humana", async () => {
-    const { supabase } = createFakeSupabase();
+    const { post } = createFakeSupabase();
 
     const result = await processAgentMessage(
       { demoCaseId: "caso-5" },
@@ -334,7 +304,7 @@ describe("processAgentMessage — integración mensaje → decisión → guardra
             requiresHuman: true,
             urgency: "high",
           }),
-        supabase,
+        post,
       },
     );
 
@@ -345,7 +315,7 @@ describe("processAgentMessage — integración mensaje → decisión → guardra
   });
 
   it("si la IA falla, el mensaje no se pierde: fallback registrado y revisión humana", async () => {
-    const { supabase, tables } = createFakeSupabase();
+    const { post, tables } = createFakeSupabase();
 
     const result = await processAgentMessage(
       { message: "Mensaje que el modelo no pudo interpretar." },
@@ -353,7 +323,7 @@ describe("processAgentMessage — integración mensaje → decisión → guardra
         analyzer: async () => {
           throw new Error("proveedor caído");
         },
-        supabase,
+        post,
       },
     );
 
@@ -366,7 +336,7 @@ describe("processAgentMessage — integración mensaje → decisión → guardra
   });
 
   it("la regla del negocio corrige a la IA: alergia tratada como consulta termina en humano", async () => {
-    const { supabase } = createFakeSupabase();
+    const { post } = createFakeSupabase();
 
     const result = await processAgentMessage(
       { message: "Mi hijo tiene alergia al maní, ¿la torta es segura?" },
@@ -377,7 +347,7 @@ describe("processAgentMessage — integración mensaje → decisión → guardra
             route: "knowledge_answer",
             urgency: "low",
           }),
-        supabase,
+        post,
       },
     );
 
@@ -394,7 +364,7 @@ describe("processAgentMessage — integración mensaje → decisión → guardra
       {
         analyzer: async () =>
           geminiAnalysis({ intent: "general_question", route: "knowledge_answer" }),
-        supabase: null,
+        post: null,
         askKnowledge: async () => ({ status: "answered", reply: "Respuesta de prueba." }),
       },
     );

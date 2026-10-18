@@ -37,11 +37,9 @@ import { FORM_FLAVOR_OPTIONS } from "@/lib/constants/business";
  *
  * El navegador solo envía las RESPUESTAS del cliente: los puntos de
  * capacidad se recalculan aquí con classifyOrder en cada llamada, y la
- * base de datos vuelve a validar todo dentro de la transacción. En esta
- * etapa no se envían correos ni se registra el lead (Etapa 4): por eso el
- * token de gestión que devuelve el servicio se DESCARTA a propósito — sin
- * correo que lo entregue (y sin página de gestión todavía, Etapa 5) no
- * hay dónde ponerlo sin filtrarlo.
+ * base de datos vuelve a validar todo dentro de la transacción. El token
+ * de gestión solo se entrega por correo; nunca se guarda en claro ni se
+ * registra en logs o eventos.
  */
 
 const GENERIC_ERROR_MESSAGE =

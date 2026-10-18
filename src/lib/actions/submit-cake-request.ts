@@ -1,11 +1,9 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
 import { after } from "next/server";
 import { cakeRequestSchema, MAX_IMAGE_SIZE_BYTES } from "@/lib/validations/cake-request";
-import { detectImageType, extensionForImageType } from "@/lib/utils/image-signature";
-import { getSupabaseServiceClient } from "@/lib/supabase/server";
-import { CAKE_REFERENCES_BUCKET, CAKE_REQUESTS_TABLE } from "@/lib/supabase/config";
+import { detectImageType } from "@/lib/utils/image-signature";
+import { backendPost } from "@/lib/backend/client";
 import { processLead } from "@/leads/service";
 import { describeCakeRequest } from "@/leads/cake-request-summary";
 
@@ -58,8 +56,8 @@ export async function submitCakeRequest(
 
   const values = parsed.data;
 
-  let referenceImagePath: string | null = null;
   const file = formData.get("referenceImage");
+  let referenceImage: Blob | null = null;
 
   if (file instanceof File && file.size > 0) {
     if (file.size > MAX_IMAGE_SIZE_BYTES) {
@@ -69,7 +67,6 @@ export async function submitCakeRequest(
         fieldErrors: { referenceImage: "La imagen supera el máximo de 5 MB." },
       };
     }
-
     const bytes = new Uint8Array(await file.arrayBuffer());
     const imageType = detectImageType(bytes);
 
@@ -83,41 +80,25 @@ export async function submitCakeRequest(
       };
     }
 
-    const fileName = `${randomUUID()}.${extensionForImageType(imageType)}`;
-
-    try {
-      const supabase = getSupabaseServiceClient();
-      const { error: uploadError } = await supabase.storage
-        .from(CAKE_REFERENCES_BUCKET)
-        .upload(fileName, bytes, { contentType: imageType, upsert: false });
-
-      if (uploadError) throw uploadError;
-      referenceImagePath = fileName;
-    } catch (error) {
-      console.error("[cake-request] fallo al subir la imagen de referencia", error);
-      return { ok: false, message: GENERIC_ERROR_MESSAGE };
-    }
+    // Django exige que el MIME coincida con la firma: se envían los bytes
+    // ya verificados con el tipo detectado, no el que declaró el navegador.
+    referenceImage = new Blob([bytes], { type: imageType });
   }
 
   try {
-    const supabase = getSupabaseServiceClient();
-    const { data: inserted, error: insertError } = await supabase
-      .from(CAKE_REQUESTS_TABLE)
-      .insert({
-        customer_name: values.customerName,
-        whatsapp: values.whatsapp,
-        email: values.email,
-        celebration_date: values.celebrationDate,
-        celebration_type: values.celebrationType,
-        guest_count: values.guestCount,
-        preferred_flavor: values.preferredFlavor,
-        cake_description: values.cakeDescription,
-        reference_image_path: referenceImagePath,
-      })
-      .select("id")
-      .single();
-
-    if (insertError) throw insertError;
+    const payload = new FormData();
+    payload.set("customer_name", values.customerName);
+    payload.set("whatsapp", values.whatsapp);
+    payload.set("email", values.email);
+    payload.set("celebration_date", values.celebrationDate);
+    payload.set("celebration_type", values.celebrationType);
+    payload.set("guest_count", String(values.guestCount));
+    payload.set("preferred_flavor", values.preferredFlavor);
+    payload.set("cake_description", values.cakeDescription);
+    if (referenceImage) payload.set("reference_image", referenceImage, "reference");
+    const inserted = await backendPost<{ ok: boolean; id?: string; reference_image_path?: string | null }>("cake-request", payload);
+    if (!inserted.ok || !inserted.id) throw new Error("No se pudo guardar la solicitud.");
+    const sourceId = inserted.id;
 
     // La automatización (registrar el lead, clasificarlo, enviar los
     // correos) corre después de responder al usuario: un fallo de correo
@@ -126,7 +107,7 @@ export async function submitCakeRequest(
     after(() =>
       processLead({
         source: "cake_request",
-        sourceId: inserted.id,
+        sourceId,
         customerName: values.customerName,
         customerWhatsapp: values.whatsapp,
         customerEmail: values.email,
@@ -142,31 +123,13 @@ export async function submitCakeRequest(
           guestCount: values.guestCount,
           preferredFlavor: values.preferredFlavor,
           cakeDescription: values.cakeDescription,
-          referenceImagePath,
+          referenceImagePath: inserted.reference_image_path ?? null,
         },
-        referenceImagePath,
+        referenceImagePath: inserted.reference_image_path ?? null,
       }),
     );
-  } catch (error) {
-    console.error("[cake-request] fallo al guardar la solicitud", error);
-
-    // La imagen ya se subió pero la solicitud no quedó registrada: borrarla
-    // para no dejar un archivo huérfano en el bucket sin ninguna fila que
-    // lo referencie.
-    if (referenceImagePath) {
-      const supabase = getSupabaseServiceClient();
-      const { error: cleanupError } = await supabase.storage
-        .from(CAKE_REFERENCES_BUCKET)
-        .remove([referenceImagePath]);
-      if (cleanupError) {
-        console.error(
-          "[cake-request] no se pudo limpiar la imagen huérfana",
-          referenceImagePath,
-          cleanupError,
-        );
-      }
-    }
-
+  } catch {
+    console.error("[cake-request] fallo al guardar la solicitud");
     return { ok: false, message: GENERIC_ERROR_MESSAGE };
   }
 
