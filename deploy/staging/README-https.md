@@ -15,6 +15,20 @@ VPS 37.27.149.66:   Caddy 80/443 ─▶ 127.0.0.1:8001 Django staging    Mailpit
 
 Estado: **preparado y probado en la simulación del VPS; nada aplicado.**
 
+**Alcance de la fase actual: HTTPS de staging en 80/443** (`--aplicar`). El
+correo de Preview (Mailpit en 465, `--aplicar-correo`) y Vercel quedan
+preparados para el paso siguiente; no se aplican todavía.
+
+**Caddy ya está instalado en el VPS** desde C1: paquete oficial 2.11.7
+(`/usr/bin/caddy`, sha256 `678ade3bfc088749c81a681adc603333ee0bb023b6a6cfe3c0f58bef8ff854e9`),
+con `caddy.service` y `caddy-api.service` inactivos y deshabilitados.
+`publicar-https.sh` **no instala, actualiza ni reinstala Caddy ni ningún
+paquete**. Comprueba que el binario es exactamente ese y bloquea si no lo es.
+Después valida e instala solo la configuración prevista (`Caddyfile.api-staging`
+→ `/etc/caddy/Caddyfile`) y habilita e inicia el `caddy.service` del paquete,
+sin modificar su unidad. El procedimiento de instalación de
+`deploy/caddy/README.md` es histórico y no se repite.
+
 ## Decisiones
 
 - **Solo el nombre de staging.** `Caddyfile.api-staging` tiene un único sitio,
@@ -176,7 +190,9 @@ Los pasos 1, 6 y 8 son locales.
    Firewalls, mira si hay un cortafuegos aplicado. Si lo hay, añade entrada
    TCP 80 y 443 desde cualquier origen (IPv4; IPv6 opcional) y anota las
    reglas para poder retirarlas. Si no hay cortafuegos, no se hace nada.
-4. **VPS, en tu terminal:**
+4. **VPS, en tu terminal.** Caddy ya está instalado: no se ejecuta `apt` ni
+   se toca la unidad. `--comprobar` verifica el binario fijado y el estado
+   C1; `--aplicar` instala solo la configuración:
    ```bash
    cd ~/fp-staging-https
    sudo bash ./publicar-https.sh --comprobar
@@ -195,7 +211,7 @@ Los pasos 1, 6 y 8 son locales.
    ```bash
    deploy/staging/probar-https.sh respaldos-privado/staging-vps/secretos/internal-api-key
    ```
-6. **Correo:**
+6. **Correo (paso siguiente, no en esta fase):**
    1. Si hay cortafuegos de Hetzner, añade TCP 465.
    2. En el VPS: `sudo bash ./publicar-https.sh --aplicar-correo`.
    3. En local: copia `~/fp-staging-https/entrega/smtp-password` y
@@ -206,8 +222,8 @@ Los pasos 1, 6 y 8 son locales.
    ```
    Para ver el buzón: `ssh -L 18025:127.0.0.1:8025 wilfredo@37.27.149.66` y
    abrir `http://127.0.0.1:18025` (usuario `operador`).
-7. **Vercel:** la sección siguiente.
-8. **Prueba de la imagen desde Preview:** ver más abajo.
+7. **Vercel (paso siguiente):** la sección siguiente.
+8. **Prueba de la imagen desde Preview (paso siguiente):** ver más abajo.
 
 ## Vercel Preview
 
