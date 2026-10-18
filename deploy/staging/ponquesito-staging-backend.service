@@ -1,0 +1,49 @@
+# Familia Ponquesito — backend Django de STAGING (solo 127.0.0.1:8001).
+# Lo instala deploy/staging/preparar-staging.sh. Ver deploy/staging/README.md.
+# Independiente de ponquesito-backend.service: otro usuario, código, venv,
+# secretos, imágenes y base (ponquesito_staging).
+[Unit]
+Description=Familia Ponquesito backend STAGING (Gunicorn, 127.0.0.1:8001)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=notify
+NotifyAccess=main
+User=ponquesito-staging
+Group=ponquesito-staging
+WorkingDirectory=/opt/ponquesito-staging/current/backend
+EnvironmentFile=/etc/ponquesito-staging/backend.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+# -b y -w en la línea de órdenes prevalecen sobre gunicorn.conf.py (8000, 3 workers).
+ExecStart=/opt/ponquesito-staging/venv/bin/gunicorn -c /opt/ponquesito-staging/current/backend/gunicorn.conf.py -b 127.0.0.1:8001 -w 2 config.wsgi:application
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=5
+UMask=0077
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+StateDirectory=ponquesito-staging
+StateDirectoryMode=0700
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

@@ -207,6 +207,11 @@ y verificado; evidencia sin filas ni secretos fuera del repo, en
 
 ## Preparación de staging (requiere autorización posterior)
 
+Pasos 2–4 preparados para un staging privado en el mismo VPS (base y rol
+`ponquesito_staging`, solo `127.0.0.1:8001`, código
+`35cfebb785e3e92dce665177e424ace08074ed33`): ver
+[deploy/staging/README.md](../deploy/staging/README.md).
+
 1. Inspeccionar **solo metadatos** de PostgreSQL del VPS: versión, bases,
    propietarios, extensiones, tablas, migraciones Django, privilegios,
    espacio y conexiones. No asumir que `ponquesito` esté vacía ni ejecutar
