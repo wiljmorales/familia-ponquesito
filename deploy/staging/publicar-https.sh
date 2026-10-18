@@ -142,7 +142,22 @@ ufw_regla() {  # ufw_regla <puerto>: nuestra|ajena|no
   elif grep -qE "^ufw allow ($1|$1/tcp)( |\$)" <<<"$anadidas"; then echo ajena
   else echo no; fi
 }
-ssh_permitido() { ufw status verbose | grep -qE '^(22(/tcp)?|OpenSSH) +ALLOW IN +Anywhere( |$)'; }
+# ssh_permitido_en: lee «ufw status verbose» por stdin; éxito si SSH (TCP 22) se
+# admite desde cualquier origen IPv4. Columnas separadas por 2+ espacios: Hacia,
+# Acción, Desde [# comentario]. Hacia puede ser 22, 22/tcp, OpenSSH o
+# «22/tcp (OpenSSH)» (regla creada con el perfil de aplicación), o Anywhere.
+# Como UFW, decide la primera regla que afecte a SSH desde Anywhere: solo vale
+# ALLOW IN. DENY, REJECT, LIMIT o una regla de salida no valen; una regla
+# limitada a un origen concreto no decide; las de IPv6 (v6) no cuentan.
+ssh_permitido_en() {
+  awk -F '  +' '
+    { sub(/[[:space:]]+$/, "") }
+    !decidido && ($1 ~ /^(22|22\/tcp|OpenSSH|22\/tcp \(OpenSSH\))$/ || $1 == "Anywhere") && $3 == "Anywhere" {
+      decidido = 1; ok = ($2 == "ALLOW IN")
+    }
+    END { exit !ok }'
+}
+ssh_permitido() { ufw status verbose | ssh_permitido_en; }
 certificado() {  # ruta del certificado de $NOMBRE emitido por Caddy (vacío si no hay)
   { find "$CERTS" -mindepth 3 -maxdepth 3 -type f -path "*/$NOMBRE/$NOMBRE.crt" 2>/dev/null || true; } | sort
 }
@@ -238,7 +253,7 @@ comprobar_dns() {
 comprobar_ufw() {
   ufw status | grep -qx 'Status: active' || bloqueo "UFW no está activo."
   ufw status verbose | grep -q '^Default: deny (incoming)' || bloqueo "la política de entrada de UFW no es deny."
-  ssh_permitido || bloqueo "UFW no muestra SSH (22/tcp u OpenSSH) permitido desde cualquier origen: revisar antes de tocar reglas."
+  ssh_permitido || bloqueo "UFW no muestra SSH (22/tcp u OpenSSH) con ALLOW IN desde cualquier origen IPv4 como primera regla que lo afecta: revisar antes de tocar reglas."
   echo "   UFW activo, entrada deny, SSH permitido; 80: $(ufw_regla 80), 443: $(ufw_regla 443), 465: $(ufw_regla 465)"
 }
 comprobar_staging() {

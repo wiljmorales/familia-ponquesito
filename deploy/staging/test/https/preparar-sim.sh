@@ -3,7 +3,8 @@
 # probar publicar-https.sh:
 # - Caddy 2.11.7 del paquete oficial, en el estado C1 del VPS: instalado,
 #   inactivo y deshabilitado, con el Caddyfile de la distribución.
-# - UFW como en el VPS: entrada deny y SSH permitido.
+# - UFW como en el VPS: entrada deny y SSH permitido con el perfil OpenSSH
+#   («22/tcp (OpenSSH)» en ufw status verbose).
 # - La IPv4 del VPS en una interfaz ficticia y api-staging → esa IP en
 #   /etc/hosts: el tráfico a 37.27.149.66 se queda dentro de la simulación.
 # - Pebble (ACME de pruebas de Let's Encrypt) en 127.0.0.1:14000. Valida de
@@ -33,8 +34,8 @@ apt-get install -y -qq /root/caddy_2.11.7_linux_amd64.deb >/dev/null
 systemctl disable --now caddy.service >/dev/null 2>&1
 echo "caddy: $(caddy version | cut -d' ' -f1) $(systemctl is-active caddy)/$(systemctl is-enabled caddy) $(sha256sum /etc/caddy/Caddyfile | cut -c1-12)"
 # UFW como en el VPS.
-ufw default deny incoming >/dev/null; ufw default allow outgoing >/dev/null; ufw allow 22/tcp >/dev/null
-ufw --force enable >/dev/null; ufw status verbose | sed -n '1,3p'
+ufw default deny incoming >/dev/null; ufw default allow outgoing >/dev/null; ufw allow OpenSSH >/dev/null
+ufw --force enable >/dev/null; ufw status verbose | grep -E '^(Status|Default|22/tcp)'
 # IPv4 del VPS y nombre de staging.
 ip link show fpvps >/dev/null 2>&1 || { ip link add fpvps type dummy; ip addr add 37.27.149.66/32 dev fpvps; ip link set fpvps up; }
 grep -q 'api-staging.familiaponquesito.com' /etc/hosts || echo '37.27.149.66 api-staging.familiaponquesito.com' >>/etc/hosts

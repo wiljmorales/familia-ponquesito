@@ -79,7 +79,11 @@ echo "== Bloqueos (código 2, sin cambios)"
 caso "DNS sin registro A" --aplicar 2 "resuelve a 'nada'" "grep -v '$NOMBRE' /etc/hosts >/root/hosts; cat /root/hosts >/etc/hosts" "echo '37.27.149.66 $NOMBRE' >>/etc/hosts"
 caso "DNS con AAAA" --aplicar 2 "tiene AAAA" "echo '2001:db8::1 $NOMBRE' >>/etc/hosts" "grep -v '^2001:db8::1 ' /etc/hosts >/root/hosts; cat /root/hosts >/etc/hosts"
 caso "UFW inactivo" --aplicar 2 "UFW no está activo" "ufw disable >/dev/null" "ufw --force enable >/dev/null"
-caso "SSH no permitido en UFW" --aplicar 2 "UFW no muestra SSH" "ufw delete allow 22/tcp >/dev/null" "ufw allow 22/tcp >/dev/null"
+caso "SSH no permitido en UFW" --aplicar 2 "UFW no muestra SSH" "ufw delete allow OpenSSH >/dev/null" "ufw allow OpenSSH >/dev/null"
+caso "SSH solo desde un origen" --aplicar 2 "UFW no muestra SSH" \
+  "ufw delete allow OpenSSH >/dev/null; ufw allow from 203.0.113.7 to any app OpenSSH >/dev/null" \
+  "ufw delete allow from 203.0.113.7 to any app OpenSSH >/dev/null; ufw allow OpenSSH >/dev/null"
+caso "SSH denegado antes del permiso" --aplicar 2 "UFW no muestra SSH" "ufw insert 1 deny 22/tcp >/dev/null" "ufw delete deny 22/tcp >/dev/null"
 caso "Caddyfile ajeno" --aplicar 2 "tiene otro contenido" "echo '# ajeno' >>/etc/caddy/Caddyfile" "cp -a /root/Caddyfile.base /etc/caddy/Caddyfile"
 caso "puerto 80 ocupado" --aplicar 2 "el puerto 80 ya está en uso" \
   "systemd-run --quiet --unit fp-ocupa80 python3 -m http.server -b 127.0.0.1 80 -d /nonexistent; sleep 1" "systemctl stop fp-ocupa80"

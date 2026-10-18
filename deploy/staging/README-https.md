@@ -101,7 +101,7 @@ Coste: un puerto más (465/tcp) y un servicio más. Ambos se retiran con
 | `probar-correo.sh` | En local: el cliente de correo de la app contra Mailpit; buzón por túnel |
 | `verificar-imagen-preview.sh` | En local: verifica la prueba de la imagen hecha desde Preview |
 | `vercel-preview.env.example` | Variables de Preview para la rama (sin secretos) |
-| `test/https/` | Simulación: `preparar-sim.sh`, `instalar-paquete-sim.sh` y `probar-sim.sh` |
+| `test/https/` | Simulación: `preparar-sim.sh`, `instalar-paquete-sim.sh` y `probar-sim.sh`; sin VPS: `regresion-ufw.sh` (control de SSH en UFW) |
 
 ## Qué hace `publicar-https.sh`
 
@@ -110,7 +110,11 @@ cambiar nada:
 - La ubicación (como `preparar-staging.sh`) y el `SHA256SUMS` del paquete.
 - El host y Ubuntu 26.04, la IPv4 del VPS, y Caddy 2.11.7 con el hash del VPS
   (`678ade3b…`).
-- UFW activo, con entrada deny y SSH permitido.
+- UFW activo, con entrada deny y SSH permitido. Se lee `ufw status verbose`
+  por columnas: la primera regla que afecta a TCP 22 (`22`, `22/tcp`,
+  `OpenSSH` o `22/tcp (OpenSSH)`) desde `Anywhere` (IPv4) debe ser `ALLOW IN`.
+  DENY, REJECT, LIMIT, una regla de salida, un permiso limitado a un origen
+  o solo IPv6 bloquean.
 - Staging activo, con `ALLOWED_HOSTS` y su URL pública.
 - Caddy en el estado C1: `caddy.service` y `caddy-api.service` inactivos y
   deshabilitados, el Caddyfile de la distribución (`66177d46…`) y 80/443/2019
@@ -308,13 +312,17 @@ En la simulación del VPS:
 - La IPv4 del VPS en una interfaz ficticia.
 - Pebble, el ACME de pruebas de Let's Encrypt, validando de verdad.
 
-`test/https/probar-sim.sh` lo hace todo desde cero. Su variante de paquete
+`test/https/probar-sim.sh` lo hace todo desde cero. En la simulación, la
+regla SSH se crea como en el VPS, con el perfil (`ufw allow OpenSSH`). Su variante de paquete
 solo añade `acme_ca` de Pebble al Caddyfile, y lo comprueba.
 
+- `regresion-ufw.sh`, 20 casos con la salida exacta de `ufw status verbose`
+  del VPS. Origen: el primer `--comprobar` real bloqueó con «UFW no muestra
+  SSH», porque la expresión anterior no aceptaba `22/tcp (OpenSSH)`.
 - Bloqueos con código 2, sin cambios en UFW, Caddy, puertos, staging ni Mailpit,
   y sin respaldos:
   - DNS sin A o con AAAA;
-  - UFW inactivo o sin SSH;
+  - UFW inactivo, sin SSH, SSH solo desde un origen o con DENY antes del permiso;
   - Caddyfile ajeno;
   - puerto 80 ocupado;
   - paquete manipulado;
