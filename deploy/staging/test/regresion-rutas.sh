@@ -44,7 +44,7 @@ caso() {
   local permisos='stat -c "%a %U:%G" / /home /home/wilfredo /home/wilfredo/fp-staging 2>/dev/null | tr "\n" " "' perm_antes perm_despues sistema
   sim "$preparar"
   antes=$(evidencias); perm_antes=$(sim "$permisos")
-  salida=$(docker exec -u wilfredo "$C" bash -c "$invocar"' ; echo "<<$?>>"' 2>&1)
+  salida=$(docker exec -u wilfredo "$C" timeout 300 bash -c "$invocar"' ; echo "<<$?>>"' 2>&1)
   real=$(sed -n 's/.*<<\([0-9]*\)>>.*/\1/p' <<<"$salida" | tail -1)
   despues=$(evidencias); perm_despues=$(sim "$permisos")
   sim "$restaurar"
@@ -115,6 +115,14 @@ caso "respaldo no privado" 2 "debe ser privado" si \
 caso "paquete manipulado" 2 "SHA256SUMS del paquete no verifica" si \
   "cp -a /home/wilfredo/fp-staging/backend-*.tar /root/tar.bak && printf X | dd of=\$(ls /home/wilfredo/fp-staging/backend-*.tar) bs=1 seek=20000 conv=notrunc status=none" \
   "${P}sudo bash ./preparar-staging.sh --comprobar" "cp -a /root/tar.bak \$(ls /home/wilfredo/fp-staging/backend-*.tar)"
+
+# Fallo dentro de una redirección ({ …; } >archivo): un psql que falla solo en
+# la consulta de pg_hba de registrar_ajustes. bash guarda una copia del registro
+# en un descriptor ≥ 10; el script debe terminar sin quedarse esperando a tee,
+# escribir el fallo en el registro (no en el archivo redirigido) y sellar.
+PSQL_FALLA='printf "#!/bin/sh\ncase \"\$*\" in *pg_hba_file_rules*) echo psql-simulado-falla >&2; exit 2;; esac\nexec /usr/bin/psql \"\$@\"\n" >/usr/local/bin/psql && chmod 755 /usr/local/bin/psql'
+caso "fallo dentro de una redirección (ajustes)" 1 "!! FALLO: orden inesperada falló" si \
+  "$PSQL_FALLA" "${P}sudo bash ./preparar-staging.sh --comprobar" "rm /usr/local/bin/psql"
 
 # Ningún bloqueo dejó cambios en el sistema.
 r=$(sim 'getent passwd ponquesito-staging; runuser -u postgres -- psql -X -At -c "SELECT count(*) FROM pg_roles WHERE rolname = '\''ponquesito_staging'\''"; ls -d /opt/ponquesito-staging /etc/ponquesito-staging 2>/dev/null; true' | tr '\n' ' ')

@@ -86,6 +86,7 @@ OPC_RW="-c statement_timeout=300s -c lock_timeout=5s -c idle_in_transaction_sess
 
 CAMBIOS=()
 BLOQUEOS=()
+REGISTRO_PID=
 
 # --- Utilidades ---------------------------------------------------------------
 cambio() { CAMBIOS+=("$1"); echo "   + $1"; }
@@ -94,8 +95,12 @@ lista_cambios() {  # lista_cambios [título]
   echo "${1:-Cambios hechos hasta aquí (no se revierten automáticamente):}"
   printf '  - %s\n' "${CAMBIOS[@]}"
 }
+# Los mensajes de fallo y bloqueo van al registro aunque ocurran dentro de una
+# redirección ({ …; } >archivo); fd 5 es el registro (ver main).
+registro_directo() { [ -z "$REGISTRO_PID" ] || exec 1>&5 2>&5; }
 fallo() {
   trap - ERR
+  registro_directo
   echo "!! FALLO: $1"
   lista_cambios
   exit 1
@@ -103,21 +108,31 @@ fallo() {
 bloqueo() {
   [ "${#CAMBIOS[@]}" -eq 0 ] || fallo "$1"
   trap - ERR
+  registro_directo
   echo "!! BLOQUEO: $1"
   if [ -d "$EVID" ]; then echo "Nada se ha cambiado en el sistema; solo se escribió la evidencia en $EVID."
   else echo "Nada se ha cambiado."; fi
   exit 2
 }
 trap 'fallo "orden inesperada falló en la línea $LINENO"' ERR
-REGISTRO_PID=
+# Devuelve la salida a la terminal y cierra toda copia del tubo del registro.
+# Si se sale dentro de una redirección ({ …; } >archivo), bash guarda la
+# salida anterior en un descriptor ≥ 10: sin cerrarlo, tee no terminaría.
+cerrar_registro() {
+  local tubo fd
+  tubo=$(readlink "/proc/$REGISTRO_PID/fd/0" 2>/dev/null || true)
+  exec 1>&3 2>&4 3>&- 4>&-
+  for fd in /proc/$BASHPID/fd/*; do
+    fd=${fd##*/}
+    if [ -n "$tubo" ] && [ "$(readlink "/proc/$BASHPID/fd/$fd" 2>/dev/null)" = "$tubo" ]; then eval "exec $fd>&-"; fi
+  done
+  wait "$REGISTRO_PID" 2>/dev/null || true
+}
 # Al salir, por cualquier camino: se cierra el registro (se devuelve la salida
 # a la terminal y se espera a que tee termine) y solo entonces se sella la
 # evidencia, para que ningún archivo cambie después de SHA256SUMS.
 al_salir() {
-  if [ -n "$REGISTRO_PID" ]; then
-    exec 1>&3 2>&4 3>&- 4>&-
-    wait "$REGISTRO_PID" 2>/dev/null || true
-  fi
+  [ -z "$REGISTRO_PID" ] || cerrar_registro
   if [ -d "$EVID" ]; then
     (cd "$EVID" && rm -f SHA256SUMS && sha256sum -- * >SHA256SUMS) && echo "Evidencia sellada: $EVID/SHA256SUMS"
     chown -R "$ADMIN:$ADMIN" "$EVID" 2>/dev/null || true
@@ -683,6 +698,7 @@ main() {
   mkdir -m 700 "$EVID"
   exec 3>&1 4>&2 > >(tee -a "$EVID/registro.txt") 2>&1
   REGISTRO_PID=$!
+  exec 5>&1
   echo "Staging Familia Ponquesito ($MODO) — $SELLO en $(hostname)"
   echo "Comprobaciones previas (solo lectura)…"
   echo "   ubicación: $PAQ/preparar-staging.sh; antecesores de root o $ADMIN, sin enlaces ni escritura de terceros"

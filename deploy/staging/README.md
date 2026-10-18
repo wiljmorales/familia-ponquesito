@@ -7,6 +7,8 @@ secretos (`/etc/ponquesito-staging/backend.env`) y otras imágenes
 (`/var/lib/ponquesito-staging/images`). Solo escucha en `127.0.0.1:8001` y se
 prueba por túnel SSH. El nombre previsto `api-staging.familiaponquesito.com`
 aún no se publica: esta fase no cambia DNS, Caddy, UFW, `pg_hba` ni Vercel.
+La publicación por HTTPS para Vercel Preview, con su SMTP de pruebas, es una
+fase aparte: [README-https.md](README-https.md).
 
 Código desplegado: `35cfebb785e3e92dce665177e424ace08074ed33`, fijado en
 `DEPLOY_SHA` de `preparar-staging.sh`. Datos de partida: el respaldo
@@ -153,12 +155,12 @@ En una simulación del VPS: Ubuntu 26.04 con systemd, PostgreSQL
 del respaldo real con su ACL y servicios de producción ficticios en 8000 y 3000.
 
 - Pasada completa: código 0 en unos 23 s; producción idéntica antes y después.
-- Regresión de rutas (23 casos), con los antecesores como en el VPS (`/` y
+- Regresión de rutas (24 casos), con los antecesores como en el VPS (`/` y
   `/home` root 755, `/home/wilfredo` 750, `fp-staging` 700). Origen: el primer
   intento real con `cd ~/fp-staging && sudo bash ./preparar-staging.sh` se
   bloqueó con «/ debe ser de wilfredo», porque `$0` relativo se resolvía después
   de `cd /`.
-- Sellado, en los 13 casos que escriben evidencia (comprobación, bloqueos y
+- Sellado, en los 14 casos que escriben evidencia (comprobación, bloqueos y
   `--aplicar` dos veces): `SHA256SUMS` verifica, también un segundo después, y
   lista exactamente los archivos; `registro.txt` contiene el mensaje final y no
   la línea del sello. Control negativo: con el script anterior, la evidencia de
@@ -173,4 +175,10 @@ del respaldo real con su ACL y servicios de producción ficticios en 8000 y 3000
   solo a `.invalid` y sin red externa. Imágenes 0600 del usuario de staging; el
   journal no contiene firmas, tokens ni la clave.
 
-No probado: el VPS real, TLS/Caddy, Vercel, Gmail ni Gemini.
+- Fallo dentro de una redirección (`{ …; } >archivo`): termina con código 1, el
+  fallo queda en el registro y la evidencia se sella. Antes del arreglo, el
+  sellado esperaba a `tee` y se quedaba bloqueado.
+
+No probado en este paso: TLS/Caddy y Vercel (ver [README-https.md](README-https.md)),
+Gmail ni Gemini. El VPS real: aplicado el 2026-10-18 (evidencia
+`evidencia-20261018T162130Z-aplicar`) y probado por túnel, 7/7.
