@@ -181,6 +181,30 @@ Ajuste a 4 MB, con el mismo `next start` → proxy TLS → Django: imagen de
 No probado aquí: Vercel real (límite de 4,5 MB, Cron, `after()` en
 serverless, variables), Caddy/TLS real, Gmail SMTP, Gemini, VPS.
 
+### Ensayo con el respaldo real del VPS (2026-10-18, Claudio)
+
+Respaldo `ponquesito-20261018T133232Z` (volcado `f9f49943…af8eb2`), descargado
+y verificado; evidencia sin filas ni secretos fuera del repo, en
+`respaldos-privado/ensayo-restauracion-20261018/`. No se tocó la base del VPS.
+
+- La base del VPS solo tiene las tablas base de Django (15 migraciones); no hay
+  tablas de `commerce`, así que `0001_initial` no choca.
+- Restauración en PostgreSQL 18.6 desechable (UTF8, `en_US.UTF-8`, libc): huellas
+  del catálogo y de las 9 tablas idénticas al respaldo **solo después de** aplicar
+  `REVOKE ALL ON DATABASE ponquesito FROM PUBLIC`. `pg_dump` sin `--create` no
+  guarda el ACL de la base; el valor del VPS se dedujo de la huella del catálogo
+  y coincide con el inventario de esa mañana (`{ponquesito_app=CTc/ponquesito_app}`).
+  Toda base de staging o restauración debe repetirlo.
+- `migrate` 0001–0004 como `ponquesito_app`: 0,8 s, objetos de `ponquesito_app`.
+  Server Actions reales → Gunicorn → la copia: solicitud con imagen, diseño, agenda
+  (enlace, token falso, reprogramar, cancelar), último cupo (7 simultáneas → 4),
+  recuperación y reporte. SMTP local solo `.invalid`, sin red externa.
+- Reversión: el código `3696d60` convive con las tablas nuevas (`/health/` 200).
+  `migrate commerce zero` borra todas las filas de commerce y deja permisos/content
+  types huérfanos hasta ejecutar `remove_stale_contenttypes` **con el código
+  anterior**; no borra imágenes ni deshace correos. Restaurar el volcado devuelve
+  la base idéntica en ~1 s y pierde lo escrito después.
+
 ## Preparación de staging (requiere autorización posterior)
 
 1. Inspeccionar **solo metadatos** de PostgreSQL del VPS: versión, bases,
