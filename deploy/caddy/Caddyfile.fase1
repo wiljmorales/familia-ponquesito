@@ -1,3 +1,5 @@
+# HISTÓRICO (2026-10-18): NO instalar. El destino vigente es Next.js en Vercel
+# y solo la API Django en este VPS: usar Caddyfile.api. Ver docs/decisions.md.
 # /etc/caddy/Caddyfile — LANZAMIENTO FASE 1 (2026-10-09; preparado, NO
 # instalado). El dominio principal solo publica la página de enlaces de los
 # QR (https://familiaponquesito.com/linktree). Sin staging público: staging

@@ -1,5 +1,10 @@
 # Caddy: proxy inverso y HTTPS
 
+> Preparación nueva: Next.js en Vercel y solo API en VPS. Usar
+> `Caddyfile.api` y [el plan de producción](../production/README.md).
+> Los esquemas de mismo origen descritos abajo son históricos y no se deben
+> aplicar al nuevo destino sin revisión.
+
 Caddy recibe el tráfico público en 80 y 443, obtiene y renueva los
 certificados de Let's Encrypt, y reparte las peticiones entre Django y
 Next.js, todo en el **mismo origen**. Caddy **no sirve páginas propias**:
@@ -70,8 +75,9 @@ cabeceras falsificadas.
 
   Así Next.js no recibe nada que pueda escribir datos o enviar correo,
   aunque esté configurado. Además, el despliegue de Next.js en staging debe
-  hacerse **sin** credenciales reales de SMTP ni la `service_role` de
-  Supabase. `/health/` y `/api/v1/*` llegan a Django, que aplica su CSRF.
+  hacerse **sin** credenciales reales de SMTP ni la clave interna de
+  Django. `/health/` y `/api/v1/*` llegan a Django; la API interna exige
+  Bearer y no acepta cookies como autenticación.
 - **Next.js todavía no está desplegado:** sus rutas, incluidas `/` y
   `/linktree`, responden 503 con un mensaje explícito en lugar de 502. Solo
   `/health/` y `/api/v1/*` funcionan hasta que se despliegue Next.js.

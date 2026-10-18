@@ -194,9 +194,9 @@ ok "Node del servidor = NODE_VERSION" "$(cat "$REL/NODE_VERSION")" "$("$NODE" --
 ok "escucha solo en 127.0.0.1" "127.0.0.1:$P" "$(ss -Hltn "sport = :$P" | awk '{print $4}' | sort -u | tr '\n' ' ' | sed 's/ $//')"
 for p in /prototipo /reporte-semanal; do echo "  info GET $p → $(code "$B$p")"; done
 ok "sin errores en el log del servidor" "" "$(grep -iE 'error|EACCES|EROFS|unhandled' "$TMP/server.log" \
-  | grep -v 'CRON_SECRET no está configurado' | grep -v 'Supabase no está configurado' | head -5)"
-# Esperado sin credenciales: /reporte-semanal registra que falta Supabase.
-echo "  info errores esperados sin credenciales: $(grep -c 'Supabase no está configurado' "$TMP/server.log")"
+  | grep -v 'CRON_SECRET no está configurado' | head -5)"
+# Sin API configurada la página de reporte degrada con un mensaje amable.
+echo "  info reporte sin API: $(grep -c 'no se pudo cargar la página del reporte semanal' "$TMP/server.log")"
 kill "${PIDS[-1]}"; wait "${PIDS[-1]}" 2>/dev/null; unset 'PIDS[-1]'
 chmod -R u+w "$REL"
 

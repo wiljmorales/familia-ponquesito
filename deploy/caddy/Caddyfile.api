@@ -1,0 +1,26 @@
+# PREPARACIÓN: Next.js vive en Vercel; este sitio solo publica Django.
+# Independiente de los Caddyfile históricos que enviaban el apex a :3000.
+{
+	servers {
+		protocols h1 h2
+	}
+}
+
+api.familiaponquesito.com {
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+	@django path /health /health/ /api/v1 /api/v1/*
+	handle @django {
+		reverse_proxy 127.0.0.1:8000 {
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Real-IP {remote_host}
+			header_up -Forwarded
+		}
+	}
+	handle {
+		respond "No encontrado" 404
+	}
+}

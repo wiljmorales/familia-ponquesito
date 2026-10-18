@@ -1,5 +1,11 @@
 # Next.js en el VPS
 
+> **Histórico para el destino actual (2026-10-18).** La plataforma pública se
+> publica en Vercel y el VPS solo sirve la API Django
+> (`../production/README.md`). Este procedimiento no se aplica a ese destino;
+> se conserva porque el servicio `ponquesito-web` existe en el VPS y no debe
+> pararse ni purgarse sin una decisión explícita.
+
 Despliegue del frontend Next.js como servidor standalone detrás de Caddy.
 **Preparado y probado en local; no se ha instalado en ningún servidor.**
 
@@ -77,8 +83,8 @@ Detalle en [`.env.example`](.env.example).
   `APP_CANONICAL_URL` (obligatoria) y `NEXT_PUBLIC_WHATSAPP_URL`. Quedan
   grabadas en el artefacto y lo identifican; cambiarlas exige recompilar.
 - **Runtime** (`/etc/ponquesito/web.env`): `APP_CANONICAL_URL` (obligatoria
-  e idéntica a la del build), `NEXT_PUBLIC_SUPABASE_URL` (solo la lee el
-  servidor), Supabase, Gemini, SMTP y `CRON_SECRET`.
+  e idéntica a la del build), `PONQUESITO_API_URL` y
+  `PONQUESITO_INTERNAL_API_KEY` (solo servidor), Gemini, SMTP y `CRON_SECRET`.
 - **URL canónica de staging:** `https://staging.familiaponquesito.com`, en
   `staging.build.env` y en `web.env`. No hay caída silenciosa a la URL de
   Vercel: el build falla sin ella y el release no se activa si `web.env` no

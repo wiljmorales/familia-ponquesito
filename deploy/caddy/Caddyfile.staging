@@ -1,3 +1,5 @@
+# HISTÓRICO (2026-10-18): NO instalar. El destino vigente es Next.js en Vercel
+# y solo la API Django en este VPS: usar Caddyfile.api. Ver docs/decisions.md.
 # /etc/caddy/Caddyfile — etapa de staging (el dominio principal NO se sirve
 # todavía desde este VPS). Credenciales de acceso en /etc/caddy/staging.env
 # (fuera de Git), cargadas por systemd: ver deploy/caddy/README.md.
