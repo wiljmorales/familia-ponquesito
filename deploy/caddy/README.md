@@ -2,6 +2,9 @@
 
 > Preparación nueva: Next.js en Vercel y solo API en VPS. Usar
 > `Caddyfile.api` y [el plan de producción](../production/README.md).
+> Staging de esa API para Vercel Preview: `Caddyfile.api-staging`
+> (`api-staging.familiaponquesito.com` → `127.0.0.1:8001`), ver
+> [deploy/staging/README-https.md](../staging/README-https.md).
 > Los esquemas de mismo origen descritos abajo son históricos y no se deben
 > aplicar al nuevo destino sin revisión.
 

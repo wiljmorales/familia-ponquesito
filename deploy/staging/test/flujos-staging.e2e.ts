@@ -1,9 +1,12 @@
 // Flujos reales de la app (Server Actions y servicios de Next.js) contra el
-// backend de staging por túnel SSH. Lo ejecuta deploy/staging/probar-tunel.sh.
+// backend de staging: por túnel SSH (deploy/staging/probar-tunel.sh) o por
+// HTTPS a través de Caddy (deploy/staging/probar-https.sh), como Vercel Preview.
 // Correo: receptor SMTP local que solo acepta destinatarios .invalid. fetch
-// bloquea cualquier host que no sea 127.0.0.1. Sin GEMINI_API_KEY.
+// bloquea cualquier host que no sea el de PONQUESITO_API_URL. Sin GEMINI_API_KEY.
 // Escribe datos sintéticos (.invalid) en ponquesito_staging; elige días con
 // cupo libre para poder repetirse. Imprime solo conteos, nunca tokens ni cuerpos.
+import { createHash } from "node:crypto";
+import dns from "node:dns";
 import { createServer, type Server } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { submitCakeRequest } from "@/lib/actions/submit-cake-request";
@@ -15,11 +18,24 @@ import { lookupReservation } from "@/reservations/service";
 import { generateWeeklyReport } from "@/reports/service";
 import { backendPost } from "@/lib/backend/client";
 import { addDaysISO, businessTodayISO } from "@/lib/business-dates";
+import { pngExacto } from "./png-exacto.mjs";
 
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
 const CUSTOMER = "cliente.staging@example.invalid";
 const OWNER = "propietaria.staging@example.invalid";
 const PUBLIC_ORIGIN = "https://api-staging.familiaponquesito.com";
+const API_HOST = new URL(process.env.PONQUESITO_API_URL!).hostname;
+// Simulación del VPS: el nombre público se resuelve a la IP del contenedor.
+const simIp = process.env.FP_SIM_IP;
+if (simIp) {
+  const lookup = dns.lookup;
+  dns.lookup = ((host: string, opts: unknown, cb?: unknown) => {
+    const callback = (typeof opts === "function" ? opts : cb) as (...a: unknown[]) => void;
+    const options = (typeof opts === "object" && opts ? opts : {}) as { all?: boolean };
+    if (host !== new URL(PUBLIC_ORIGIN).hostname) return (lookup as (...a: unknown[]) => void)(host, opts, cb);
+    return options.all ? callback(null, [{ address: simIp, family: 4 }]) : callback(null, simIp, 4);
+  }) as typeof dns.lookup;
+}
 
 interface Mail { rcpt: string[]; raw: string }
 const mails: Mail[] = [];
@@ -107,7 +123,7 @@ beforeAll(async () => {
   });
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
-    if (url.hostname !== "127.0.0.1") { blockedHosts.push(url.hostname); throw new Error("red externa bloqueada"); }
+    if (url.hostname !== API_HOST) { blockedHosts.push(url.hostname); throw new Error("red externa bloqueada"); }
     return realFetch(input, init);
   }) as typeof fetch;
   // Días sin reservas dentro de la ventana, lejos de los bordes.
@@ -128,7 +144,7 @@ afterAll(() => {
   console.log("EVIDENCIA_TUNEL " + JSON.stringify(evidence));
 });
 
-describe("flujos Next.js → backend de staging por túnel", () => {
+describe("flujos Next.js → backend de staging", () => {
   it("solicitud con imagen privada: correos y enlace firmado", async () => {
     const before = mails.length;
     const form = new FormData();
@@ -140,7 +156,7 @@ describe("flujos Next.js → backend de staging por túnel", () => {
     expect(nuevos.filter((m) => m.rcpt.includes(CUSTOMER))).toHaveLength(1);
     const owner = nuevos.filter((m) => m.rcpt.includes(OWNER));
     expect(owner).toHaveLength(1);
-    // Django firma con el origen público HTTPS; por ahora se sirve por el túnel.
+    // Django firma con el origen público HTTPS; por túnel se reescribe al túnel.
     const signed = decoded(owner[0].raw).match(/https:\/\/api-staging\.familiaponquesito\.com\/api\/v1\/private-images\/[^\s"<>]+/)?.[0]
       ?.replace(/&amp;/g, "&").replace(PUBLIC_ORIGIN, process.env.PONQUESITO_API_URL!);
     expect(signed).toBeTruthy();
@@ -151,6 +167,29 @@ describe("flujos Next.js → backend de staging por túnel", () => {
     const bad = await realFetch(signed!.replace(/sig=.{6}/, "sig=AAAAAA"));
     expect(bad.status).not.toBe(200);
     evidence.solicitud = { correos: nuevos.length, enlace_firmado: ok.status, firma_alterada: bad.status };
+  });
+
+  it("imagen de 4.000.000 bytes (el máximo): se guarda íntegra y se descarga por el enlace firmado", async () => {
+    const before = mails.length;
+    const png: Buffer<ArrayBuffer> = pngExacto(4_000_000);
+    const form = new FormData();
+    for (const [k, v] of Object.entries({ customerName: "Cliente Staging", whatsapp: "+58 412 0000000", email: CUSTOMER, celebrationDate: freeDays[0], celebrationType: "cumpleanos", guestCount: "12", preferredFlavor: "chocolate", cakeDescription: "Imagen de tamaño máximo en staging" })) form.set(k, v);
+    form.set("referenceImage", new File([png], "maxima.png", { type: "image/png" }));
+    expect((await submitCakeRequest(form)).ok).toBe(true);
+    await drainAfter();
+    const owner = mails.slice(before).filter((m) => m.rcpt.includes(OWNER));
+    expect(owner).toHaveLength(1);
+    const signed = decoded(owner[0].raw).match(/https:\/\/api-staging\.familiaponquesito\.com\/api\/v1\/private-images\/[^\s"<>]+/)?.[0]
+      ?.replace(/&amp;/g, "&").replace(PUBLIC_ORIGIN, process.env.PONQUESITO_API_URL!);
+    expect(signed).toBeTruthy();
+    const res = await realFetch(signed!);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/png");
+    const body = Buffer.from(await res.arrayBuffer());
+    const sha = (b: Buffer) => createHash("sha256").update(b).digest("hex");
+    expect(body.length).toBe(4_000_000);
+    expect(sha(body)).toBe(sha(png));
+    evidence.imagen_maxima = { bytes: body.length, descarga: res.status, sha256_igual: true };
   });
 
   it("diseño personalizado: guardado y correos", async () => {

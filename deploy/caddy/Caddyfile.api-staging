@@ -1,0 +1,89 @@
+# /etc/caddy/Caddyfile — staging de la API: api-staging.familiaponquesito.com
+# → Django de staging (127.0.0.1:8001). Next.js vive en Vercel Preview y llama
+# a esta API desde el servidor con Bearer. Producción (127.0.0.1:8000) no
+# tiene sitio aquí. Lo instala deploy/staging/publicar-https.sh; ver
+# deploy/staging/README-https.md.
+{
+	# Sin API de administración, ni en localhost ni por socket: ningún
+	# proceso local puede reconfigurar Caddy. Los cambios se aplican con
+	# «systemctl restart caddy» («reload» no funciona sin admin).
+	admin off
+
+	servers {
+		# Solo HTTP/1.1 y HTTP/2: no se abre 443/udp.
+		protocols h1 h2
+		# El Host debe coincidir con el SNI: 421 si se pide otro sitio por
+		# esta conexión TLS.
+		strict_sni_host on
+	}
+
+	# Los errores del proxy (p. ej. backend caído) registran la petición:
+	# sin la firma de imágenes ni credenciales.
+	log default {
+		format filter {
+			request>uri query {
+				delete sig
+			}
+			request>headers>Authorization delete
+			request>headers>Cookie delete
+		}
+	}
+}
+
+api-staging.familiaponquesito.com {
+	# Solo Let's Encrypt (sin ZeroSSL de respaldo): la ruta del certificado
+	# en /var/lib/caddy es fija; el SMTP de pruebas (Mailpit) lo reutiliza.
+	tls {
+		issuer acme
+	}
+
+	# Registro de accesos sin la firma de imágenes (válida 1 h) ni credenciales.
+	log {
+		format filter {
+			request>uri query {
+				delete sig
+			}
+			request>headers>Authorization delete
+			request>headers>Cookie delete
+		}
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		X-Robots-Tag "noindex, nofollow, noarchive"
+		-Server
+	}
+
+	# Solo las rutas que usa la aplicación. Django recibe la ruta completa.
+	# - /health/: estado (sin datos).
+	# - /api/v1/internal/*: API entre servidores; Django exige Bearer.
+	# - /api/v1/private-images/*: imagen de referencia por enlace firmado
+	#   (correo a la propietaria); Django exige la firma.
+	@django path /health /health/ /api/v1/internal/* /api/v1/private-images/*
+	handle @django {
+		# Imagen de hasta 4.000.000 bytes más campos y multipart.
+		request_body {
+			max_size 4500000
+		}
+		reverse_proxy 127.0.0.1:8001 {
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Real-IP {remote_host}
+			header_up -Forwarded
+		}
+	}
+	handle {
+		respond "No encontrado" 404
+	}
+
+	handle_errors 502 503 504 {
+		respond "Servicio no disponible" 503
+	}
+}
+
+# Cualquier otro nombre o la IP por HTTP: 404, sin llegar a ninguna
+# aplicación. La redirección a HTTPS y el desafío ACME de api-staging siguen
+# funcionando (los añade Caddy antes de este bloque).
+http:// {
+	respond "No encontrado" 404
+}

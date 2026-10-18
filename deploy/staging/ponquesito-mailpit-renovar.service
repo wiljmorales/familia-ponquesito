@@ -1,0 +1,8 @@
+# Recarga en Mailpit el certificado de api-staging que Caddy renueva (Let's
+# Encrypt lo renueva ~30 días antes de caducar). Los mensajes se conservan.
+[Unit]
+Description=Familia Ponquesito: recargar el certificado del SMTP de pruebas
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl try-restart ponquesito-mailpit.service

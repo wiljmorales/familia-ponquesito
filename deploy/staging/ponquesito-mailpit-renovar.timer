@@ -1,0 +1,9 @@
+[Unit]
+Description=Familia Ponquesito: recargar a diario el certificado del SMTP de pruebas
+
+[Timer]
+OnCalendar=*-*-* 04:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

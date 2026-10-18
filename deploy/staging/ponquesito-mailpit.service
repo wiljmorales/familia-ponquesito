@@ -1,0 +1,66 @@
+# Familia Ponquesito — SMTP de pruebas para Vercel Preview (Mailpit 1.31.4).
+# Lo instala deploy/staging/publicar-https.sh --aplicar-correo. Ver
+# deploy/staging/README-https.md.
+# - SMTP solo con TLS implícito en 0.0.0.0:465, con el certificado de
+#   api-staging.familiaponquesito.com que obtiene Caddy (LoadCredential en
+#   ponquesito-mailpit.service.d/certificado.conf), y AUTH obligatoria. Go
+#   escucha también en IPv6 (*:465), igual que Caddy; sin AAAA no se anuncia.
+# - Solo acepta destinatarios @example.invalid; el resto, 550.
+# - No reenvía: sin configuración de relay ni de forward.
+# - Interfaz y API en 127.0.0.1:8025 con contraseña; se consultan por túnel SSH.
+[Unit]
+Description=Familia Ponquesito SMTP de pruebas de Preview (Mailpit, no reenvía)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ponquesito-mailpit
+Group=ponquesito-mailpit
+# Environment= no expande «$»: la expresión llega tal cual a Mailpit.
+Environment=MP_SMTP_ALLOWED_RECIPIENTS=(?i)@example[.]invalid$
+ExecStart=/opt/ponquesito-mailpit/mailpit \
+  --database /var/lib/ponquesito-mailpit/mailpit.db \
+  --label "Familia Ponquesito Preview" \
+  --listen 127.0.0.1:8025 \
+  --ui-auth-file /etc/ponquesito-mailpit/ui-auth \
+  --smtp 0.0.0.0:465 \
+  --smtp-require-tls \
+  --smtp-tls-cert %d/tls.crt \
+  --smtp-tls-key %d/tls.key \
+  --smtp-auth-file /etc/ponquesito-mailpit/smtp-auth \
+  --smtp-max-recipients 5 \
+  --smtp-disable-rdns \
+  --max-message-size 10 \
+  --max 1000 \
+  --max-age 14d \
+  --disable-version-check \
+  --block-remote-css-and-fonts
+Restart=on-failure
+RestartSec=5
+UMask=0077
+
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+StateDirectory=ponquesito-mailpit
+StateDirectoryMode=0700
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target
