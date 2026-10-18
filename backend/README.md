@@ -1,12 +1,12 @@
-# Backend Django — base mínima
+# Backend Django — API de negocio privada
 
-Base de Django con PostgreSQL en el VPS de Hetzner. En esta etapa solo hay
-un endpoint, `/health/`, y el espacio `/api/v1/` reservado y vacío. No
-incluye módulos de negocio, Django Admin ni datos de Supabase.
+Backend Django/PostgreSQL para solicitudes, diseños, agenda, reservas, leads,
+eventos, decisiones del agente y reportes. Además de `/health/`, expone la API
+Bearer `/api/v1/internal/` y las imágenes firmadas de solo lectura. El código
+está preparado localmente; aún no se ha desplegado en el VPS.
 
-Comparte origen con el frontend Next.js de la raíz. Caddy envía a Django
-solo `/health/` y `/api/v1/*`; todo lo demás, incluido el resto de `/api/*`,
-es de Next.js (ver `deploy/caddy/README.md`).
+Next.js permanece en Vercel. Caddy expone Django en el subdominio API;
+el navegador no consume la API interna. Ver `docs/supabase-to-django.md`.
 
 ## Versiones
 
@@ -42,8 +42,8 @@ no hay otra en el repositorio ni en el equipo local.
 - `DJANGO_ALLOWED_HOSTS` es obligatoria y no tiene valor por defecto. Para
   el acceso por túnel vale `127.0.0.1,localhost`; detrás de Caddy hay que
   añadir el nombre público.
-- Las cookies de sesión y CSRF llevan `Path=/api/v1/`, para no mezclarse con
-  las de Next.js en el mismo origen.
+- Las cookies de sesión y CSRF llevan `Path=/api/v1/`. La API interna no usa
+  cookies como autenticación; Next.js está en otro origen.
 - Publicación detrás de Caddy. Las dos variables son opcionales; si no se
   definen, el comportamiento es el del acceso por túnel.
   - `DJANGO_BEHIND_HTTPS_PROXY=true`: confía en `X-Forwarded-Proto` y marca
@@ -53,9 +53,17 @@ no hay otra en el repositorio ni en el equipo local.
 ## Pruebas
 
 ```bash
-DJANGO_SECRET_KEY=x DJANGO_ALLOWED_HOSTS=localhost POSTGRES_DB=x POSTGRES_USER=x POSTGRES_PASSWORD=x \
+# Solo rutas (sin base de datos):
+DJANGO_SECRET_KEY=x DJANGO_ALLOWED_HOSTS=localhost,testserver POSTGRES_DB=x POSTGRES_USER=x POSTGRES_PASSWORD=x \
   .venv/bin/python manage.py test config.tests
 ```
+
+`commerce` necesita una PostgreSQL **desechable** real (bloqueos de cupo y
+restricciones): ver la validación local de `docs/supabase-to-django.md`.
+
+Imágenes huérfanas (archivo sin fila que lo referencie): `manage.py
+cleanup_orphan_images` solo informa; `--delete` borra las de más de 24 h. Ver
+`docs/supabase-to-django.md`.
 
 `config/tests/test_routing.py` no necesita base de datos y comprueba, con y
 sin proxy HTTPS delante:
@@ -93,6 +101,13 @@ Para correr el servidor en local hace falta un PostgreSQL local, o bien
 apuntar las variables a uno.
 
 ## Despliegue en el VPS
+
+**No ejecutar aún `backend/scripts/sync-to-vps.sh` para esta migración.**
+El script histórico reemplaza el backend y llama automáticamente a
+`manage.py migrate`; antes hay que inventariar y respaldar PostgreSQL del VPS,
+probar staging aislado y aprobar la aplicación. Ver
+`docs/supabase-to-django.md`. Las instrucciones que siguen documentan la
+instalación anterior, no autorizan una nueva ejecución.
 
 ### Estructura
 
@@ -182,9 +197,9 @@ curl -s http://127.0.0.1:8000/health/
 
 ### Reversión
 
-- **A un commit anterior:** `VPS_HOST=<admin>@<host> backend/scripts/sync-to-vps.sh <commit>` y
-  después `sudo systemctl restart ponquesito-backend`. Las migraciones no se
-  revierten solas; si hiciera falta, se usa `manage.py migrate <app> <migración>`.
+- **Para esta migración:** no volver a un commit con Supabase como rollback
+  funcional ni revertir migraciones automáticamente; preservar solicitudes y
+  reservas nuevas y seguir el procedimiento de `docs/supabase-to-django.md`.
 - **Retirar el servicio por completo:**
   ```bash
   sudo systemctl disable --now ponquesito-backend
