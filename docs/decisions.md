@@ -596,3 +596,50 @@ descubrir que el backend desplegado en el VPS es una revisión antigua
 - **Sin cambios en el VPS**: el backend y su `backend.env` se quedan como
   están. El artefacto de Next.js desplegado (`23c4f0c98b25-8ad20707a17d`) no
   cambia: este cambio es solo de Caddy, que aún no está instalado.
+
+## 2026-10-17 — C1 completado; preparación Vercel + API en VPS
+
+El operador confirma C1 v5 con código 0: Caddy 2.11.7 instalado, ambas unidades
+inactive/disabled, sin máscaras ni listeners; servicios protegidos verificados.
+SHA del ejecutable: `34a1e4a6b04497b50c95703e88b308d12546e31580a2f54de46717a9699f9285`.
+TXID exitoso y journal pendientes de incorporar; no se atribuye a los intentos
+revertidos. No se volvió a ejecutar C1.
+
+Nueva topología solicitada, solo en preparación: Next.js en Vercel y Django tras
+Caddy en api.familiaponquesito.com. Sustituye como destino propuesto al esquema
+de ambos servicios bajo el apex del VPS; no modifica aún el tráfico existente.
+Ver [preparación de producción](../deploy/production/README.md). La API Django
+de negocio aún no existía en esa fecha; ver la entrada del 2026-10-18.
+
+## 2026-10-18 — Plataforma completa: Next.js en Vercel, Django/PostgreSQL en el VPS
+
+Wilfredo y Frederik fijan el objetivo: publicar la plataforma completa en
+`familiaponquesito.com` y `www`, conservando `/linktree` (enlaces y QR
+impresos). Sustituye como destino a las decisiones de fase 1 del
+2026-10-09 y 2026-10-10 (solo Linktree, sin Django), que quedan como
+historia. Consecuencias:
+
+- Next.js se publica en el proyecto Vercel existente (`familia-ponquesito`);
+  no se crea otro. `/linktree` sigue siendo `public/linktree.html` servido
+  por el rewrite de `next.config.ts`; no depende de Django ni de ninguna
+  variable, así que una caída de la API no afecta a los QR.
+- Django/PostgreSQL atiende `api.familiaponquesito.com` detrás de Caddy
+  (`deploy/caddy/Caddyfile.api`) y es la única persistencia. Supabase se
+  retira del código: el antiguo solo tenía datos de prueba. Esto **no**
+  autoriza borrar ni reinicializar la PostgreSQL del VPS.
+- `deploy/caddy/Caddyfile.fase1`, `Caddyfile.production`,
+  `Caddyfile.staging`, el bloque `ponquesito_fase1` y `deploy/web/` (Next.js
+  en el VPS) no se aplican a este destino. Se conservan sin borrar porque
+  documentan lo probado y el servicio web local del VPS sigue existiendo.
+- Revisión de la migración (detalle en `docs/supabase-to-django.md`): la
+  recuperación del enlace envía el correo en `after()` para no revelar por
+  tiempo de respuesta qué código/correo existen; la imagen se reenvía a
+  Django con el MIME detectado por firma; las Server Actions admiten 6 MB
+  porque el límite por defecto (1 MB) impedía las imágenes de hasta 5 MB
+  prometidas; hay un comando de limpieza de huérfanas que por defecto solo
+  informa.
+- Límite conocido y pendiente de decisión: las funciones de Vercel no aceptan
+  cuerpos mayores de 4,5 MB, así que en Vercel una imagen de entre ~4,4 y
+  5 MB fallará aunque el formulario la permita. Opciones: bajar el máximo
+  anunciado a 4 MB o redimensionar en el navegador. No se elige sin
+  Wilfredo/Frederik.
