@@ -271,15 +271,21 @@ Production ni de Development.
    - un `CRON_SECRET` nuevo (`vercel-preview-cron-secret`, 64 hex, 600), que
      `aplicar` genera si falta.
 
-   El resto son Encrypted, así que `aplicar` comprueba su valor exacto. Hay que
-   crearlas **antes del primer push**: el push despliega automáticamente con
-   las variables que haya en ese momento.
+   El resto son Encrypted, así que `aplicar` comprueba su valor exacto.
+   **Orden:** Vercel rechaza las variables de una rama que no está en GitHub
+   (`Branch … not found in the connected Git repository (400)`), y el push
+   despliega solo. Por eso hay dos pasos. Primero `aplicar` aparca las
+   generales y se detiene con código 3. Así el push despliega sin variables
+   heredadas. Después del push, `aplicar` crea las de la rama.
    ```bash
    python3 -I deploy/staging/vercel-preview.py revisar   # 0 listo, 3 pendientes, 2 bloqueo; no cambia nada
-   python3 -I deploy/staging/vercel-preview.py aplicar
+   python3 -I deploy/staging/vercel-preview.py aplicar   # aparca; sin la rama en GitHub termina en 3
+   git push -u origin feature/supabase-to-django-local   # despliegue sin variables propias ni heredadas
+   python3 -I deploy/staging/vercel-preview.py aplicar   # crea las 13 de la rama
    ```
-   Bloquea, sin cambios, si la rama ya está en GitHub o tiene despliegues, si
-   falta Vercel Authentication, si una variable general comparte entrada con
+   Bloquea, sin cambios, si un despliegue de la rama pudo heredar variables
+   generales: porque aún las hay o porque es anterior al aparcamiento. También
+   si falta Vercel Authentication, si una variable general comparte entrada con
    otro entorno, si la rama tiene variables fuera del ejemplo, o si un secreto
    no tiene permisos 600 o el formato esperado.
 3. **Protección de despliegue:** ya está en Standard Protection
@@ -400,9 +406,11 @@ solo añade `acme_ca` de Pebble al Caddyfile, y lo comprueba.
 - La producción simulada (8000/3000) no recibió ninguna petición en toda la
   prueba, y su foto es idéntica antes y después de cada ejecución.
 
-`test/regresion-vercel-preview.py`, 28 casos sin red: una CLI falsa emula la
-API de Vercel con el estado real del proyecto. Cubre:
+`test/regresion-vercel-preview.py`, 32 casos sin red: una CLI falsa emula la
+API de Vercel con el estado real del proyecto, incluido el 400 para una rama
+que no está en GitHub. Cubre:
 - los 8 bloqueos sin cambios;
+- `aplicar` sin push, que aparca, no intenta crear y termina en 3;
 - `aplicar` exacto e idempotente, con production intacta y ningún secreto en
   argv, salida ni evidencia;
 - `canonica`, que rechaza URL ajenas y alias de otra rama;

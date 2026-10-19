@@ -49,9 +49,14 @@ FALSO = textwrap.dedent(r'''
         if m == "GET": fin({"envs": [sin_valor(e) for e in envs]})
         if m == "POST":
             c = cuerpo
+            if c.get("gitBranch") and c["gitBranch"] not in s["remotas"]:
+                # Como la API real: 400, mensaje en stderr y nada en stdout.
+                rama = c["gitBranch"]
+                print(f'Error: Branch "{rama}" not found in the connected Git repository. (400)', file=sys.stderr)
+                sys.exit(1)
             if any(e["key"] == c["key"] and e.get("gitBranch") == c.get("gitBranch") and set(e["target"]) & set(c["target"]) for e in envs):
                 err("ENV_ALREADY_EXISTS")
-            e = {**c, "id": f"nuevo{len(envs)}", "updatedAt": 2}; envs.append(e)
+            s["reloj"] += 1; e = {**c, "id": f"nuevo{len(envs)}", "updatedAt": s["reloj"]}; envs.append(e)
             fin({"created": sin_valor(e), "failed": []})
     if r[:3] == ["v1", "projects", s["proyecto"]["id"]] and m == "GET":
         e = por_id[r[4]]; fin({**sin_valor(e), "value": "" if e["type"] == "sensitive" else e["value"]})
@@ -60,7 +65,7 @@ FALSO = textwrap.dedent(r'''
         if m == "DELETE": envs.remove(e); fin(sin_valor(e))
         if m == "PATCH":
             if cuerpo.get("gitBranch") and e["target"] != ["preview"]: err("bad_request")
-            e.update(cuerpo); e["updatedAt"] += 1; fin(sin_valor(e))
+            s["reloj"] += 1; e.update(cuerpo); e["updatedAt"] = s["reloj"]; fin(sin_valor(e))
     err("ruta_desconocida")
 ''').lstrip()
 
@@ -80,8 +85,8 @@ def inicial():
                      "rootDirectory": None, "nodeVersion": "24.x",
                      "ssoProtection": {"deploymentType": "all_except_custom_domains"},
                      "link": {"type": "github", "org": "wiljmorales", "repo": "familia-ponquesito", "productionBranch": "main"}},
-        "envs": envs, "remotas": ["main", "reto-8/agenda-ponquesito"], "aliases": {},
-        "despliegues": [{"uid": "dpl_main", "target": "production", "meta": {"githubCommitRef": "main"}}],
+        "envs": envs, "remotas": ["main", "reto-8/agenda-ponquesito"], "aliases": {}, "reloj": 100,
+        "despliegues": [{"uid": "dpl_main", "target": "production", "createdAt": 50, "meta": {"githubCommitRef": "main"}}],
     }
 
 
@@ -158,13 +163,18 @@ with tempfile.TemporaryDirectory() as t:
     bloqueo("clave interna que no son 64 hex", corto, "no son 64 caracteres")
     (c.privado / "secretos/internal-api-key").write_text(c.secretos["internal-api-key"] + "\n")
 
-    def subida():
-        s = c.leer(); s["remotas"].append(RAMA); c.poner(s)
-    bloqueo("rama ya en GitHub", subida, "ya está en GitHub")
-
     def desplegada():
-        s = c.leer(); s["despliegues"].append({"uid": "d1", "target": None, "meta": {"githubCommitRef": RAMA}}); c.poner(s)
-    bloqueo("rama ya desplegada", desplegada, "despliegue(s) de")
+        s = c.leer(); s["remotas"].append(RAMA)
+        s["despliegues"].append({"uid": "d1", "target": None, "createdAt": 200, "meta": {"githubCommitRef": RAMA}}); c.poner(s)
+    bloqueo("despliegue de la rama con variables generales aún presentes", desplegada, "pudo heredar")
+
+    def anterior():
+        s = c.leer(); s["remotas"].append(RAMA)
+        for e in s["envs"]:
+            if e["target"] == ["preview"] and not e["gitBranch"]:
+                e["gitBranch"] = "reto-8/agenda-ponquesito"; e["updatedAt"] = 300
+        s["despliegues"].append({"uid": "d1", "target": None, "createdAt": 250, "meta": {"githubCommitRef": RAMA}}); c.poner(s)
+    bloqueo("despliegue anterior al aparcamiento", anterior, "pudo heredar")
 
     def compartida():
         s = c.leer(); s["envs"][13]["target"] = ["preview", "development"]; c.poner(s)
@@ -192,10 +202,23 @@ with tempfile.TemporaryDirectory() as t:
     caso("revisar: evidencia sellada", revisar_evid and subprocess.run(["sha256sum", "-c", "--quiet", "SHA256SUMS"], cwd=revisar_evid).returncode == 0)
 
     n = c.correr("aplicar")
+    s05 = c.leer(); evid_aparcar = c.evid
+    posts = [l for l in c.argv.read_text().splitlines() if '"POST"' in l]
+    caso("aplicar sin push: código 3, 13 aparcadas, ningún POST, production intacta",
+         n == 3 and not posts and not rama(s05) and produccion(s05) == produccion(s0)
+         and not [e for e in s05["envs"] if e["target"] == ["preview"] and not e["gitBranch"]]
+         and "haz el push" in c.ultima)
+    caso("revisar sin push y ya aparcadas: código 3, sin bloqueos",
+         c.correr("revisar") == 3 and "BLOQUEO" not in c.ultima and "tras el push" in c.ultima)
+    # Push: la rama existe y su primer despliegue es posterior al aparcamiento.
+    s = c.leer(); s["remotas"].append(RAMA)
+    s["despliegues"].append({"uid": "d_rama", "target": None, "createdAt": s["reloj"] + 1, "meta": {"githubCommitRef": RAMA}})
+    c.poner(s)
+    n = c.correr("aplicar")
     s1 = c.leer(); r = rama(s1); aplicar_evid = c.evid
     ejemplo = dict(re.findall(r"^([A-Z][A-Z0-9_]*)=(.*)$", (RAIZ / "deploy/staging/vercel-preview.env.example").read_text(), re.M))
     caso("aplicar: código 0", n == 0)
-    caso("aplicar: 0 generales de Preview, 13 aparcadas en reto-8",
+    caso("aplicar tras el push: 0 generales de Preview, 13 aparcadas en reto-8",
          not [e for e in s1["envs"] if e["target"] == ["preview"] and not e["gitBranch"]]
          and sum(e["id"].startswith("g") and e["gitBranch"] == "reto-8/agenda-ponquesito" for e in s1["envs"]) == 13)
     caso("aplicar: la rama tiene exactamente las claves del ejemplo", set(r) == set(ejemplo))
@@ -223,9 +246,7 @@ with tempfile.TemporaryDirectory() as t:
     caso("revisar tras aplicar: listo (0)", c.correr("revisar") == 0 and "listo para el push" in c.ultima)
 
     s = c.leer()
-    s["remotas"].append(RAMA)
-    s["despliegues"] += [{"uid": "d_rama", "target": None, "meta": {"githubCommitRef": RAMA}},
-                         {"uid": "d_otra", "target": None, "meta": {"githubCommitRef": "reto-8/agenda-ponquesito"}}]
+    s["despliegues"] += [{"uid": "d_otra", "target": None, "createdAt": 60, "meta": {"githubCommitRef": "reto-8/agenda-ponquesito"}}]
     s["aliases"] = {ALIAS: {"deploymentId": "d_rama"}, "familia-ponquesito-git-reto-8-wiljmorales-projects.vercel.app": {"deploymentId": "d_otra"}}
     c.poner(s); antes = huella(s)
     caso("canonica: URL que no es alias de rama → 2 sin cambios",
@@ -235,12 +256,16 @@ with tempfile.TemporaryDirectory() as t:
     caso("canonica: alias de la rama → 0 y valor puesto",
          c.correr("canonica", f"https://{ALIAS}") == 0 and rama(c.leer())["APP_CANONICAL_URL"]["value"] == f"https://{ALIAS}"
          and produccion(c.leer()) == produccion(s0))
-    caso("aplicar tras el push: bloqueado, no resetea la URL",
-         c.correr("aplicar") == 2 and rama(c.leer())["APP_CANONICAL_URL"]["value"] == f"https://{ALIAS}")
+    caso("aplicar tras canonica: sin escrituras, conserva la URL",
+         c.correr("aplicar") == 0 and rama(c.leer())["APP_CANONICAL_URL"]["value"] == f"https://{ALIAS}")
+    caso("revisar tras canonica: listo (0)", c.correr("revisar") == 0)
 
     n = c.correr("revertir", str(aplicar_evid))
+    s15 = c.leer()
+    caso("revertir (evidencia de crear): código 0, rama sin variables", n == 0 and not rama(s15))
+    n = c.correr("revertir", str(evid_aparcar))
     s2 = c.leer()
-    caso("revertir: código 0, rama sin variables", n == 0 and not rama(s2))
+    caso("revertir (evidencia de aparcar): código 0", n == 0)
     caso("revertir: variables generales y production como al inicio",
          sorted(x for x in huella(s2)) == sorted(huella(s0)))
     caso("todas las evidencias sin secretos",

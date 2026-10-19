@@ -13,6 +13,11 @@
   en la rama RESGUARDO: así la rama no hereda nada, sin depender de que una
   variable de rama sobrescriba a la general y sin borrar valores que Vercel no
   deja leer. `revertir` las devuelve a todas las ramas.
+- Vercel solo acepta variables de una rama que ya está en GitHub, y el push
+  despliega solo. Orden: `aplicar` (aparca; sin la rama en GitHub se detiene
+  ahí, código 3), push, `aplicar` (crea), `canonica` y redespliegue. Bloquea
+  cualquier despliegue de la rama que pudo heredar variables generales: si
+  aún las hay, o si es anterior al aparcamiento.
 - Nunca se toca una variable con target production o development.
 - Evidencia (solo nombres, ids, tipos y alcance) en EVIDENCIAS/vercel-<UTC>-<modo>.
 Códigos: 0 listo, 3 cambios pendientes (los hace `aplicar`), 2 bloqueo.
@@ -38,6 +43,7 @@ ARCHIVOS = {
 }
 ALIAS = re.compile(r"^https://familia-ponquesito-git-[a-z0-9-]+-wiljmorales-projects\.vercel\.app$")
 registro = []
+ESTADO = {"en_github": False}
 
 
 def di(msg=""):
@@ -66,7 +72,8 @@ def api(ruta, metodo="GET", cuerpo=None):
         d = {}
     if p.returncode != 0 or (isinstance(d, dict) and "error" in d):
         e = d.get("error", {}) if isinstance(d, dict) else {}
-        raise Bloqueo(f"API {metodo} {ruta.split('?')[0]}: {e.get('code', p.returncode)} {e.get('message', '')}".strip())
+        msg = e.get("message") or (p.stderr.strip().splitlines() or [""])[-1][:300]
+        raise Bloqueo(f"API {metodo} {ruta.split('?')[0]}: {e.get('code', p.returncode)} {msg}".strip())
     return d
 
 
@@ -142,18 +149,21 @@ def revisar():
     ramas = subprocess.run(["git", "ls-remote", "--heads", "origin", RAMA, RESGUARDO], capture_output=True, text=True, cwd=RAIZ)
     if ramas.returncode != 0:
         bloqueos.append("git ls-remote origin falló")
-    previo = modo in ("revisar", "aplicar")
-    if previo and f"refs/heads/{RAMA}" in ramas.stdout:
-        bloqueos.append(f"{RAMA} ya está en GitHub: puede haber desplegado con las variables generales")
+    ESTADO["en_github"] = f"refs/heads/{RAMA}" in ramas.stdout
     if f"refs/heads/{RESGUARDO}" not in ramas.stdout:
         bloqueos.append(f"la rama de resguardo {RESGUARDO} no está en GitHub")
     despl = api(f"/v6/deployments?projectId={PROYECTO}&limit=100").get("deployments", [])
     propios = [d for d in despl if (d.get("meta") or {}).get("githubCommitRef") == RAMA]
-    if previo and propios:
-        bloqueos.append(f"ya hay {len(propios)} despliegue(s) de {RAMA}")
 
     envs = variables()
     generales = [e for e in envs if "preview" in (e.get("target") or []) and not e.get("gitBranch")]
+    aparcado = max((e.get("updatedAt") or 0 for e in envs if e.get("gitBranch") == RESGUARDO), default=0)
+    for d in propios:
+        creado = d.get("createdAt") or d.get("created") or 0
+        di(f"despliegue de {RAMA}: {d.get('uid')} {d.get('state') or d.get('readyState')} "
+           f"{(d.get('meta') or {}).get('githubCommitSha', '')[:7]} {time.strftime('%FT%TZ', time.gmtime(creado / 1000))}")
+        if modo in ("revisar", "aplicar") and (generales or creado <= aparcado):
+            bloqueos.append(f"el despliegue {d.get('uid')} pudo heredar variables generales de Preview")
     for e in generales:
         if e["target"] != ["preview"] or e.get("customEnvironmentIds"):
             bloqueos.append(f"{e['key']} general de Preview comparte entrada con {e['target']}: no se aparca")
@@ -170,7 +180,7 @@ def revisar():
                 bloqueos.append(error)
         e = rama.get(k)
         if not e:
-            pendientes.append(f"crear {k} para {RAMA} ({tipo})")
+            pendientes.append(f"crear {k} para {RAMA} ({tipo})" + ("" if ESTADO["en_github"] else ", tras el push"))
         elif e["type"] != tipo or e["target"] != ["preview"]:
             bloqueos.append(f"{k} de {RAMA} es {e['type']} {e['target']}, se esperaba {tipo} [preview]")
         elif valor is not None and not valor_ok(k, valor_de(e), valor):
@@ -226,6 +236,12 @@ def aplicar(envs):
             evidencia("hechos.json", hechos)
             di(f"   aparcada {e['key']} → {RESGUARDO}")
     rama = {e["key"]: e for e in envs if e.get("gitBranch") == RAMA}
+    evidencia("hechos.json", hechos)
+    if not ESTADO["en_github"] and set(exp) - set(rama):
+        evidencia("despues.json", [meta(e) for e in variables()])
+        di(f"   0 generales de Preview; {RAMA} no está en GitHub y Vercel no acepta aún sus variables:")
+        di("   haz el push (desplegará sin variables heredadas) y vuelve a ejecutar `aplicar`.")
+        return 3
     for k, (valor, tipo) in exp.items():
         if valor is None:
             valor, error = secreto(k, generar=True)
@@ -247,7 +263,7 @@ def aplicar(envs):
         evidencia("hechos.json", hechos)
         di(f"   creada {k} ({tipo})")
     evidencia("hechos.json", hechos)
-    return comprobar_final(envs)
+    return 0 if comprobar_final(envs) else 1
 
 
 def canonica(url, envs):
@@ -314,7 +330,7 @@ if __name__ == "__main__":
             codigo = 3 if pendientes else 0
             di("Revisión: " + ("cambios pendientes; los hace `aplicar`." if pendientes else "listo para el push.") + " Nada se ha cambiado.")
         elif modo == "aplicar":
-            codigo = 0 if aplicar(envs) else 1
+            codigo = aplicar(envs)
         else:
             codigo = 0 if canonica(sys.argv[2], envs) else 1
     except Bloqueo as b:
