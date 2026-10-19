@@ -8,6 +8,8 @@
 // firmados ni secretos.
 // Uso (Node 22):
 //   node deploy/staging/test/flujos-preview.mjs https://<alias-de-rama>
+//   FP_PASOS=cupo,limpieza,correo node deploy/staging/test/flujos-preview.mjs …
+//     (último cupo con reservas simultáneas; aparte, por el límite de reservas)
 // Entorno: FP_SECRETOS (por defecto ../respaldos-privado/staging-vps/secretos),
 //   SSH_KEY, FP_SSH (wilfredo@37.27.149.66).
 import { spawn, spawnSync } from "node:child_process";
@@ -50,7 +52,7 @@ function caso(nombre, ok, detalle = "") {
 
 // ---- Vercel: todas las peticiones por `vercel curl` -------------------------
 let n = 0;
-function vercel(ruta, { metodo = "GET", cabeceras = {}, cuerpo } = {}) {
+function prepararVercel(ruta, { metodo = "GET", cabeceras = {}, cuerpo } = {}) {
   const id = ++n;
   const args = ["-sS", "-X", metodo, "-D", join(TMP, `h${id}`), "-o", join(TMP, `b${id}`), "-w", "%{http_code}", "--max-time", "120"];
   if (Object.keys(cabeceras).length) {
@@ -62,9 +64,27 @@ function vercel(ruta, { metodo = "GET", cabeceras = {}, cuerpo } = {}) {
     writeFileSync(join(TMP, `d${id}`), cuerpo, { mode: 0o600 });
     args.push("--data-binary", `@${join(TMP, `d${id}`)}`);
   }
-  const p = spawnSync("npx", ["--no-install", "vercel@62.2.0", "curl", ruta, "--deployment", ALIAS, "--", ...args],
-    { cwd: RAIZ, encoding: "utf8", env: { ...process.env, VERCEL_TELEMETRY_DISABLED: "1" }, timeout: 180_000 });
-  const estado = Number((p.stdout.match(/(\d{3})\s*$/) ?? [])[1] ?? 0);
+  return { id, argv: ["--no-install", "vercel@62.2.0", "curl", ruta, "--deployment", ALIAS, "--", ...args] };
+}
+const OPCIONES_NPX = { cwd: RAIZ, env: { ...process.env, VERCEL_TELEMETRY_DISABLED: "1" } };
+function vercel(ruta, opciones) {
+  const { id, argv } = prepararVercel(ruta, opciones);
+  const p = spawnSync("npx", argv, { ...OPCIONES_NPX, encoding: "utf8", timeout: 180_000 });
+  return respuestaVercel(id, p.stdout);
+}
+/** Como vercel(), sin bloquear el proceso: para peticiones simultáneas. */
+function vercelEnParalelo(ruta, opciones) {
+  const { id, argv } = prepararVercel(ruta, opciones);
+  return new Promise((ok) => {
+    const p = spawn("npx", argv, { ...OPCIONES_NPX, stdio: ["ignore", "pipe", "ignore"] });
+    const limite = setTimeout(() => p.kill(), 180_000);
+    let salida = "";
+    p.stdout.setEncoding("utf8").on("data", (d) => (salida += d));
+    p.on("close", () => { clearTimeout(limite); ok(respuestaVercel(id, salida)); });
+  });
+}
+function respuestaVercel(id, salida) {
+  const estado = Number((salida.match(/(\d{3})\s*$/) ?? [])[1] ?? 0);
   let cuerpoResp = Buffer.alloc(0), cab = "";
   try { cuerpoResp = readFileSync(join(TMP, `b${id}`)); cab = readFileSync(join(TMP, `h${id}`), "utf8"); } catch {}
   rmSync(join(TMP, `c${id}`), { force: true });
@@ -73,7 +93,7 @@ function vercel(ruta, { metodo = "GET", cabeceras = {}, cuerpo } = {}) {
 }
 
 /** Invoca una Server Action como el navegador y devuelve su valor de retorno. */
-async function accion(pagina, id, args) {
+async function accion(pagina, id, args, { paralelo = false } = {}) {
   const codificado = await encodeReply(args);
   let cuerpo, tipo;
   if (typeof codificado === "string") {
@@ -82,9 +102,10 @@ async function accion(pagina, id, args) {
     const r = new Response(codificado);
     tipo = r.headers.get("content-type"); cuerpo = Buffer.from(await r.arrayBuffer());
   }
-  const r = vercel(pagina, { metodo: "POST", cuerpo, cabeceras: {
+  const opciones = { metodo: "POST", cuerpo, cabeceras: {
     "Next-Action": id, Accept: "text/x-component", "Content-Type": tipo, Origin: ALIAS,
-  } });
+  } };
+  const r = paralelo ? await vercelEnParalelo(pagina, opciones) : vercel(pagina, opciones);
   if (r.estado !== 200 || !r.cabeceras.includes("text/x-component")) {
     throw new Error(`acción ${pagina} → HTTP ${r.estado}`);
   }
@@ -220,13 +241,15 @@ try {
     Object.keys(ids).sort().join(", "));
 
   // Disponibilidad real (dos meses) para elegir días libres, lejos de los bordes.
-  const libres = [];
+  const libres = [], vacios = [];
   const hoy = new Date();
   for (let k = 0; k < 3 && libres.length < 3; k++) {
     const mes = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth() + k, 1)).toISOString().slice(0, 7);
     const d = await accion("/agenda", ids.fetchAgendaAvailability, [orden(), mes]);
     if (!d.ok) throw new Error(`disponibilidad ${mes}: ${d.message}`);
-    libres.push(...d.days.filter((x) => x.canAccept && x.status === "available" && x.capacityRemaining >= 2).map((x) => x.date).filter((f) => f > d.todayISO));
+    const aceptan = d.days.filter((x) => x.canAccept && x.status === "available" && x.date > d.todayISO);
+    libres.push(...aceptan.filter((x) => x.capacityRemaining >= 2).map((x) => x.date));
+    vacios.push(...aceptan.filter((x) => x.capacityRemaining === 4).map((x) => x.date));
   }
   caso("disponibilidad real desde Preview", libres.length >= 3, `${libres.length} días aceptan`);
   const [d1, d2, d3] = libres.slice(-3);
@@ -332,21 +355,69 @@ try {
     if (j.status === "sent") caso("reporte: correo a la propietaria", (await correos(PROPIETARIA, 1)).length === 1);
   }
 
-  // 7. Chat sin Gemini: debe fallar de forma visible, sin llamadas a Gemini.
+  // 7. Chat sin Gemini: aviso de indisponibilidad (503) que ofrece el formulario,
+  // sin respuesta inventada ni llamadas a Gemini.
   if (paso("chat")) {
     const r = vercel("/api/assistant", { metodo: "POST", cabeceras: { "Content-Type": "application/json", Origin: ALIAS }, cuerpo: JSON.stringify({ message: "¿Hacen tortas de chocolate?", history: [] }) });
-    evidencia.chat = { estado: r.estado, mensaje: (() => { try { return JSON.parse(r.cuerpo.toString("utf8")).error; } catch { return null; } })() };
-    caso("chat sin GEMINI_API_KEY: error visible, no respuesta inventada", r.estado >= 500, `${r.estado} «${evidencia.chat.mensaje}»`);
+    const j = (() => { try { return JSON.parse(r.cuerpo.toString("utf8")); } catch { return {}; } })();
+    evidencia.chat = { estado: r.estado, mensaje: j.error ?? null, no_disponible: j.unavailable === true };
+    caso("chat sin GEMINI_API_KEY: no disponible y ofrece el formulario", r.estado === 503 && j.unavailable === true && /formulario/.test(j.error ?? ""),
+      `${r.estado} «${evidencia.chat.mensaje}»`);
+    const pagina = vercel("/asistente");
+    caso("chat: la página /asistente carga", pagina.estado === 200, String(pagina.estado));
     const ag = vercel("/api/agent", { metodo: "POST", cabeceras: { "Content-Type": "application/json", Origin: ALIAS }, cuerpo: JSON.stringify({ message: "Hola, quiero una torta para 20 personas el sábado" }) });
     evidencia.agente = ag.estado;
     console.log(`   info agente (/api/agent): HTTP ${ag.estado}`);
   }
 
-  // 8. Limpieza: cancela las reservas sintéticas que esta corrida dejó abiertas
+  // 8. Último cupo: un día vacío queda con 1 punto libre (reserva de 3) y llegan a
+  // la vez 4 reservas de 1 punto. El bloqueo por día de Django debe aceptar
+  // exactamente una; las demás reciben capacity_unavailable y no envían correo.
+  // Al final se cancelan las reservas de este paso y el día vuelve a 4 puntos.
+  // Usa 5 de los 5 intentos de reserva por IP cada 15 minutos: va solo.
+  if (paso("cupo")) {
+    const dia = vacios.filter((f) => ![d1, d2, d3].includes(f)).at(-1);
+    if (!dia) throw new Error("cupo: no hay un día vacío (4 puntos) que acepte reservas");
+    const diaDe = async () => (await accion("/agenda", ids.fetchAgendaAvailability, [orden(), dia.slice(0, 7)])).days.find((x) => x.date === dia);
+    const relleno = await accion("/agenda", ids.submitAgendaReservation, [{ ...orden(dia, "Cliente Preview Cupo"), tiers: "two_or_more" }]);
+    caso("cupo: reserva de 3 puntos en un día vacío", relleno.ok === true && relleno.status === "pending_deposit", relleno.ok ? relleno.status : relleno.message);
+    if (!relleno.ok) throw new Error("cupo: sin la reserva de 3 puntos no hay último cupo");
+    abiertas.set(relleno.code, enlaceGestion((await correos(CLIENTE, 1))[0], relleno.code).token);
+    await correos(PROPIETARIA, 1);
+    const antes = await diaDe();
+    caso("cupo: queda 1 punto, marcado como último cupo", antes?.capacityRemaining === 1 && antes.isLastSlot === true, `${antes?.capacityRemaining} restante`);
+    const intentos = await Promise.all([1, 2, 3, 4].map(async (i) => {
+      const t0 = Date.now();
+      const r = await accion("/agenda", ids.submitAgendaReservation, [orden(dia, `Cliente Preview Cupo ${i}`)], { paralelo: true });
+      return { r, t0, t1: Date.now() };
+    }));
+    const solape = Math.min(...intentos.map((x) => x.t1)) - Math.max(...intentos.map((x) => x.t0));
+    caso("cupo: las 4 peticiones estuvieron en curso a la vez", solape > 0, `${solape} ms en común`);
+    const aceptadas = intentos.filter((x) => x.r.ok);
+    const sinCupo = intentos.filter((x) => !x.r.ok && /se acaba de llenar/.test(x.r.message ?? ""));
+    caso("cupo: exactamente una aceptada", aceptadas.length === 1, `${aceptadas.length} aceptadas`);
+    caso("cupo: las demás rechazadas por capacidad", sinCupo.length === 3, `${sinCupo.length} sin cupo`);
+    const c = await correos(CLIENTE, 4, { segundos: 30 }), o = await correos(PROPIETARIA, 4, { segundos: 5 });
+    caso("cupo: correos solo de la aceptada (after())", c.length === aceptadas.length && o.length === aceptadas.length, `${c.length}+${o.length}`);
+    for (const { r } of aceptadas) {
+      const m = c.find((x) => textoDe(x).includes(`/agenda/reservas/${r.code}?`));
+      if (m) abiertas.set(r.code, enlaceGestion(m, r.code).token);
+    }
+    const lleno = await diaDe();
+    caso("cupo: el día queda sin capacidad", lleno?.capacityRemaining === 0 && lleno.canAccept === false, `${lleno?.capacityRemaining} restante, ${lleno?.status}`);
+    const codigos = [relleno.code, ...aceptadas.map((x) => x.r.code)];
+    await limpiar();
+    const despues = await diaDe();
+    caso("cupo: capacidad liberada tras cancelar", despues?.capacityRemaining === 4, `${despues?.capacityRemaining} restante`);
+    evidencia.cupo = { dia, solape_ms: solape, aceptadas: aceptadas.length, sin_cupo: sinCupo.length,
+      restante: [antes?.capacityRemaining, lleno?.capacityRemaining, despues?.capacityRemaining], codigos };
+  }
+
+  // 9. Limpieza: cancela las reservas sintéticas que esta corrida dejó abiertas
   // (p. ej. si un paso falló entre la reserva y su cancelación).
   if (paso("limpieza")) await limpiar();
 
-  // 9. Todo el correo de esta corrida: solo .invalid.
+  // 10. Todo el correo de esta corrida: solo .invalid.
   if (paso("correo")) {
     const d = await mailpit("/api/v1/messages?limit=500");
     const todos = d.messages.filter((m) => new Date(m.Created) >= T0);
