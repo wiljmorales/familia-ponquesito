@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { AssistantReply, AssistantStatus } from "@/assistant/types";
 
@@ -39,6 +40,9 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* Sin IA en el servidor: reintentar no sirve, se ofrece el formulario. */
+  const [unavailable, setUnavailable] = useState<string | null>(null);
+  const isDisabled = isLoading || unavailable !== null;
   const nextId = useRef(1);
   const scrollAnchor = useRef<HTMLDivElement>(null);
 
@@ -48,7 +52,7 @@ export default function Chat() {
 
   async function send(text: string) {
     const trimmed = text.trim();
-    if (trimmed.length === 0 || isLoading) return;
+    if (trimmed.length === 0 || isDisabled) return;
 
     /* Contexto acotado: solo los últimos turnos reales (sin el saludo
        fijo), para no enviar conversaciones crecientes al proveedor. */
@@ -75,7 +79,12 @@ export default function Chat() {
       if (!response.ok) {
         const data = (await response.json().catch(() => null)) as {
           error?: string;
+          unavailable?: boolean;
         } | null;
+        if (data?.unavailable && data.error) {
+          setUnavailable(data.error);
+          return;
+        }
         throw new Error(data?.error ?? "El asistente no pudo responder.");
       }
 
@@ -160,12 +169,27 @@ export default function Chat() {
         </div>
       )}
 
+      {unavailable && (
+        <div
+          role="alert"
+          className="mx-4 mb-2 flex flex-col items-start gap-3 rounded-lg border border-border-soft bg-accent-soft/60 px-3 py-3 text-sm text-foreground"
+        >
+          <p>{unavailable}</p>
+          <Link
+            href="/#formulario"
+            className="rounded-full bg-accent px-4 py-2 font-medium text-white transition-colors hover:bg-accent-strong"
+          >
+            Ir al formulario de tortas
+          </Link>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2 px-4 pb-3">
         {SUGGESTED_QUESTIONS.map((question) => (
           <button
             key={question}
             type="button"
-            disabled={isLoading}
+            disabled={isDisabled}
             onClick={() => send(question)}
             className="rounded-full border border-border-soft bg-surface px-3 py-1.5 text-xs text-muted transition-colors hover:border-accent hover:text-accent-strong disabled:opacity-50"
           >
@@ -188,11 +212,12 @@ export default function Chat() {
           placeholder="Escribe tu pregunta…"
           aria-label="Escribe tu pregunta"
           maxLength={1000}
+          disabled={unavailable !== null}
           className="min-w-0 flex-1 rounded-full border border-border-soft bg-background px-4 py-2.5 text-sm outline-none placeholder:text-muted/70 focus:border-accent"
         />
         <button
           type="submit"
-          disabled={isLoading || input.trim().length === 0}
+          disabled={isDisabled || input.trim().length === 0}
           className="rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
         >
           Enviar

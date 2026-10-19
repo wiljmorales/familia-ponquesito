@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { geminiProvider } from "@/providers/gemini";
 import {
   AssistantInputError,
+  AssistantUnavailableError,
   MAX_HISTORY_TURNS,
   MAX_MESSAGE_LENGTH,
   askAssistant,
@@ -41,6 +42,7 @@ describe("selección de proveedor", () => {
 
   it("falla de forma visible en producción sin GEMINI_API_KEY (nunca degrada en silencio)", () => {
     vi.stubEnv("NODE_ENV", "production");
+    expect(() => defaultProvider()).toThrow(AssistantUnavailableError);
     expect(() => defaultProvider()).toThrow(/GEMINI_API_KEY/);
   });
 

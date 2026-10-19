@@ -1,4 +1,8 @@
-import { AssistantInputError, askAssistant } from "@/assistant/service";
+import {
+  AssistantInputError,
+  AssistantUnavailableError,
+  askAssistant,
+} from "@/assistant/service";
 import { AssistantProviderError } from "@/providers/gemini";
 import { createRateLimiter } from "./rate-limit";
 
@@ -22,6 +26,10 @@ const PROVIDER_ERROR_MESSAGES: Record<AssistantProviderError["kind"], string> =
     network:
       "No pude conectarme para preparar tu respuesta. Intenta de nuevo, por favor.",
   };
+
+/* El chat lo muestra junto a un enlace al formulario de tortas. */
+const UNAVAILABLE_MESSAGE =
+  "El asistente no está disponible temporalmente. Mientras tanto, puede enviarnos su pedido de torta con el formulario.";
 
 export async function POST(request: Request) {
   if (!isAllowed(clientKey(request))) {
@@ -50,6 +58,13 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof AssistantInputError) {
       return Response.json({ error: error.message }, { status: 400 });
+    }
+    if (error instanceof AssistantUnavailableError) {
+      console.error("Asistente no disponible:", error.message);
+      return Response.json(
+        { error: UNAVAILABLE_MESSAGE, unavailable: true },
+        { status: 503 },
+      );
     }
     if (error instanceof AssistantProviderError) {
       // Detalle técnico solo al log del servidor; al usuario, mensaje amable.

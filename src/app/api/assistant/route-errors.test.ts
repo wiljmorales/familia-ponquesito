@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { AssistantUnavailableError } from "@/assistant/service";
 import { AssistantProviderError } from "@/providers/gemini";
 
 /* Simula fallos del proveedor para verificar que el endpoint responde con
@@ -51,6 +52,20 @@ describe("POST /api/assistant — fallos del proveedor", () => {
       expect(data.error).not.toContain("detalle técnico interno");
     },
   );
+
+  it("responde 503 sin IA configurada y ofrece el formulario", async () => {
+    mocks.askAssistant.mockRejectedValueOnce(
+      new AssistantUnavailableError("Falta GEMINI_API_KEY"),
+    );
+    const response = await POST(makeRequest());
+    expect(response.status).toBe(503);
+
+    const data = await response.json();
+    expect(data.unavailable).toBe(true);
+    expect(data.error).toContain("no está disponible temporalmente");
+    expect(data.error).toContain("formulario");
+    expect(data.error).not.toMatch(/gemini|api_key/i);
+  });
 
   it("responde 500 ante errores inesperados", async () => {
     mocks.askAssistant.mockRejectedValueOnce(new Error("boom interno"));

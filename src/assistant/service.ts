@@ -10,6 +10,9 @@ import type {
 /** Entrada inválida del cliente; el endpoint la traduce a un 400. */
 export class AssistantInputError extends Error {}
 
+/** Sin IA configurada en producción; el endpoint lo traduce a un 503. */
+export class AssistantUnavailableError extends Error {}
+
 export const MAX_MESSAGE_LENGTH = 1000;
 /** Turnos de contexto que se conservan; el resto se descarta (cuota). */
 export const MAX_HISTORY_TURNS = 6;
@@ -17,7 +20,8 @@ export const MAX_HISTORY_TURNS = 6;
 /**
  * Con GEMINI_API_KEY se usa el proveedor real. Sin ella, el determinista
  * SOLO en desarrollo y pruebas; en producción es un error de configuración
- * y debe fallar de forma visible, nunca degradar en silencio a la demo.
+ * y debe fallar de forma visible, nunca degradar en silencio a la demo: el
+ * chat avisa que no está disponible y ofrece el formulario de tortas.
  * Las pruebas también pueden inyectar un proveedor explícito en askAssistant.
  */
 export function defaultProvider(): AssistantProvider {
@@ -26,7 +30,7 @@ export function defaultProvider(): AssistantProvider {
   }
 
   if (process.env.NODE_ENV === "production") {
-    throw new Error(
+    throw new AssistantUnavailableError(
       "Falta GEMINI_API_KEY: el asistente no puede funcionar en producción sin IA.",
     );
   }
