@@ -246,33 +246,61 @@ Proyecto `familia-ponquesito` (`prj_zxK7…`), equipo `wiljmorales-projects`
 (`team_T8pir…`), repositorio público `wiljmorales/familia-ponquesito`. La rama
 `feature/supabase-to-django-local` **aún no está en GitHub**.
 
-1. **Revisar las variables de Preview existentes**, las que aplican a todas
-   las ramas. Una variable general que no se sobrescribe para la rama llega
-   igual a ella. `GEMINI_API_KEY`, SMTP reales, `PONQUESITO_*` de producción y
-   `SUPABASE_*` no deben estar en Preview: hay que dejarlas solo en Production.
-2. **Variables de Preview solo para la rama**: las de
-   `vercel-preview.env.example`, con los secretos marcados como Sensitive:
+`deploy/staging/vercel-preview.py` (CLI `vercel@62.2.0` fijada, por
+`vercel api`) revisa y aplica todo lo de esta sección. Los secretos se leen
+de `respaldos-privado/staging-vps/secretos/` y nunca pasan por argv, la
+salida ni la evidencia (`respaldos-privado/staging-vps/vercel-<UTC>-<modo>/`,
+solo nombres, ids, tipos y alcance, con `SHA256SUMS`). Nunca toca variables de
+Production ni de Development.
+
+1. **Variables generales de Preview** (todas las ramas). En la revisión del
+   2026-10-19 eran 13, creadas en julio junto a las de Production:
+   `GEMINI_API_KEY`, `GEMINI_MODEL`, `SMTP_*`, `EMAIL_FROM`,
+   `KAREM_NOTIFICATION_EMAIL`, `CRON_SECRET`, `NEXT_PUBLIC_SUPABASE_*` y
+   `SUPABASE_SERVICE_ROLE_KEY`. Llegarían a esta rama. Una variable de rama
+   sobrescribe a la general con el mismo nombre, pero `GEMINI_API_KEY` no se
+   puede «quitar» así: el código solo mira si existe. `aplicar` las **aparca**
+   en la rama `reto-8/agenda-ponquesito`, que ya las recibía, con un PATCH de
+   `gitBranch`: no se borra ningún valor y `revertir` las devuelve. Las
+   futuras Preview de otras ramas ya no las reciben; los despliegues
+   existentes no cambian.
+2. **Variables de Preview solo para la rama**: las 13 de
+   `vercel-preview.env.example`. Los secretos son Sensitive:
    - la clave de staging;
    - la contraseña SMTP de pruebas;
-   - un `CRON_SECRET` nuevo, generado con `openssl rand -hex 32` y guardado en
-     almacenamiento privado.
+   - un `CRON_SECRET` nuevo (`vercel-preview-cron-secret`, 64 hex, 600), que
+     `aplicar` genera si falta.
 
-   Hay que crearlas **antes del primer push**: el push despliega
-   automáticamente con las variables que haya en ese momento.
-3. **Protección de despliegue:** Settings → Deployment Protection → Vercel
-   Authentication con **Standard Protection**. Así, Preview, incluido el alias
-   de rama, solo se abre con una sesión de Vercel con acceso al equipo. Está
-   disponible en todos los planes. No se usa Password Protection: no existe en
-   Hobby y en Pro es de pago.
+   El resto son Encrypted, así que `aplicar` comprueba su valor exacto. Hay que
+   crearlas **antes del primer push**: el push despliega automáticamente con
+   las variables que haya en ese momento.
+   ```bash
+   python3 -I deploy/staging/vercel-preview.py revisar   # 0 listo, 3 pendientes, 2 bloqueo; no cambia nada
+   python3 -I deploy/staging/vercel-preview.py aplicar
+   ```
+   Bloquea, sin cambios, si la rama ya está en GitHub o tiene despliegues, si
+   falta Vercel Authentication, si una variable general comparte entrada con
+   otro entorno, si la rama tiene variables fuera del ejemplo, o si un secreto
+   no tiene permisos 600 o el formato esperado.
+3. **Protección de despliegue:** ya está en Standard Protection
+   (`ssoProtection: all_except_custom_domains`). Así, Preview, incluido el
+   alias de rama, solo se abre con una sesión de Vercel con acceso al equipo.
+   No se usa Password Protection: no existe en Hobby y en Pro es de pago.
 4. **Primer despliegue:** `git push -u origin feature/supabase-to-django-local`.
-   Es un repositorio **público**: queda publicado el código de la rama, que
-   no contiene secretos.
+   Es un repositorio **público**: queda publicado el código de la rama. Se
+   comprobó que ni su árbol ni sus commits sin publicar contienen los valores
+   de los secretos.
 5. **Origen canónico estable:** el alias de rama
    `familia-ponquesito-git-<rama>-wiljmorales-projects.vercel.app`. Supera 63
-   caracteres, así que Vercel lo recorta con un hash; se lee en el
-   despliegue, en «Domains». Pon `APP_CANONICAL_URL=https://<alias>` (solo
-   para la rama) y **redespliega**. No hay dominio propio para Preview: haría
-   falta otro registro DNS, fuera de esta fase.
+   caracteres, así que Vercel lo recorta con un hash (como
+   `…-git-integration-e7ea55-…`); se lee en el despliegue, en «Domains».
+   ```bash
+   python3 -I deploy/staging/vercel-preview.py canonica https://<alias>
+   ```
+   Comprueba que el alias apunta a un despliegue Preview de esta rama antes de
+   cambiar `APP_CANONICAL_URL`. Después hay que **redesplegar**. No hay
+   dominio propio para Preview: haría falta otro registro DNS, fuera de esta
+   fase.
 6. **Comprobar:** Preview sin sesión → página de Vercel Authentication; con
    sesión, la portada. El cron de `vercel.json` no se ejecuta en Preview.
 
@@ -308,8 +336,9 @@ date -u +%Y-%m-%dT%H:%M:%SZ                                   # hora de inicio (
 
 En este orden. Ninguno de estos pasos toca producción.
 
-1. **Vercel:** borra las variables de la rama o quita la rama; la protección
-   puede quedarse.
+1. **Vercel:** `python3 -I deploy/staging/vercel-preview.py revertir
+   <evidencia-de-aplicar>` borra las variables de la rama y devuelve las
+   generales a todas las ramas de Preview. La protección puede quedarse.
 2. **VPS:** `sudo bash ./publicar-https.sh --retirar`.
 3. **Hetzner:** retira las reglas 80, 443 y 465 que añadiste, si las hubo.
 4. **Porkbun:** borra el A `api-staging`. Pasado el TTL (600 s),
@@ -371,6 +400,14 @@ solo añade `acme_ca` de Pebble al Caddyfile, y lo comprueba.
 - La producción simulada (8000/3000) no recibió ninguna petición en toda la
   prueba, y su foto es idéntica antes y después de cada ejecución.
 
+`test/regresion-vercel-preview.py`, 28 casos sin red: una CLI falsa emula la
+API de Vercel con el estado real del proyecto. Cubre:
+- los 8 bloqueos sin cambios;
+- `aplicar` exacto e idempotente, con production intacta y ningún secreto en
+  argv, salida ni evidencia;
+- `canonica`, que rechaza URL ajenas y alias de otra rama;
+- `revertir`, que deja las variables como al principio.
+
 No probado: Let's Encrypt real, el DNS público, el cortafuegos de Hetzner, el
 acceso por IPv6, Vercel (despliegue, variables, protección y salida a 465) ni
 el VPS real.
@@ -384,5 +421,5 @@ No se piden contraseñas ni secretos por el chat.
 | DNS | Sesión en Porkbun para ver la zona y crear o borrar `api-staging` | Sin acceso: no hay API key ni CLI. Visto el DNS público por DoH (arriba) |
 | Cortafuegos de red | Hetzner Cloud Console (o un token de API de solo lectura) para saber si hay un cortafuegos aplicado al servidor | Sin acceso: no hay `hcloud` ni token |
 | VPS | Tu terminal con `sudo` para `publicar-https.sh` | SSH de `wilfredo` sin sudo: Caddy 2.11.7 inactivo/deshabilitado, Caddyfile de la distribución, puertos, IPv6 configurada; `user.rules` de UFW no es legible sin sudo |
-| Vercel | Sesión en el dashboard, o `vercel login` (la CLI no está instalada y no hay token), para revisar y crear las variables de Preview, activar la protección y leer el alias | IDs del proyecto y del equipo en `.vercel/project.json`; equipo `wiljmorales-projects` y despliegues anteriores por la API de GitHub |
+| Vercel | Autorizar `vercel-preview.py aplicar` (y después `canonica`) | `vercel login` hecho; `vercel-preview.py revisar` el 2026-10-19: GitHub `wiljmorales/familia-ponquesito`, producción en `main`, Standard Protection, Node 24.x, 13 variables generales de Preview por aparcar y 13 de rama por crear |
 | GitHub | Autorizar el push de la rama al repositorio público | `gh` autenticado como `wiljmorales`; la rama no está publicada |
