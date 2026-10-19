@@ -243,7 +243,7 @@ with tempfile.TemporaryDirectory() as t:
     n = c.correr("aplicar")
     escrituras = [l for l in c.argv.read_text().splitlines()[llamadas:] if '"-X"' in l]
     caso("aplicar repetido: código 0 y ninguna escritura", n == 0 and not escrituras and huella(c.leer()) == huella(s1))
-    caso("revisar tras aplicar: listo (0)", c.correr("revisar") == 0 and "listo para el push" in c.ultima)
+    caso("revisar tras aplicar: listo (0)", c.correr("revisar") == 0 and "listo: variables de la rama completas" in c.ultima)
 
     s = c.leer()
     s["despliegues"] += [{"uid": "d_otra", "target": None, "createdAt": 60, "meta": {"githubCommitRef": "reto-8/agenda-ponquesito"}}]

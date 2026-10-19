@@ -328,7 +328,7 @@ if __name__ == "__main__":
             di("Bloqueado: nada se ha cambiado.")
         elif modo == "revisar":
             codigo = 3 if pendientes else 0
-            di("Revisión: " + ("cambios pendientes; los hace `aplicar`." if pendientes else "listo para el push.") + " Nada se ha cambiado.")
+            di("Revisión: " + ("cambios pendientes; los hace `aplicar`." if pendientes else "listo: variables de la rama completas, ninguna general.") + " Nada se ha cambiado.")
         elif modo == "aplicar":
             codigo = aplicar(envs)
         else:
